@@ -1,5 +1,5 @@
 """
-MD5: 97d2b8b205b1b8c831e9be3dd4129ba8
+MD5: 5c52f7da3d0a2776677b287e41c3d6f2
 """
 
 try: QCAlgorithm
@@ -139,7 +139,7 @@ class Order(object):
 class Broker(object):
     def __init__(self, parent, cash):
         self._parent = parent
-        self.available = Portfolio(parent=parent, cash=cash)
+        self.Portfolio = Portfolio(parent=parent, cash=cash)
         self.orders = []
 
     def addOrder(self, order):
@@ -155,18 +155,18 @@ class Broker(object):
         for order in self.orders:
             symbol = order.Symbol
             if order.Type == OrderType.Market and \
-                order.Symbol in self.available:
-                position = self.available[symbol]
+                order.Symbol in self.Portfolio:
+                position = self.Portfolio[symbol]
 
                 avail_qty = position.Quantity
                 price = float(self._parent.Securities[symbol].Price)
 
                 if order.Quantity < avail_qty:
-                    self.available.fillOrder(symbol, -order.Quantity, price)
+                    self.Portfolio.fillOrder(symbol, -order.Quantity, price)
                     order.Portfolio.fillOrder(symbol, order.Quantity, price)
                     continue
                 else:
-                    self.available.fillOrder(symbol, -avail_qty, price)
+                    self.Portfolio.fillOrder(symbol, -avail_qty, price)
                     order.Portfolio.fillOrder(symbol, avail_qty, price)
                     order.Quantity -= avail_qty
 

@@ -206,7 +206,7 @@ class TestMarketOrders(unittest.TestCase):
         self.qc = QCAlgorithm()
         self.qc.Securities = Securities([(FOO, 2.5)])
         self.broker = Broker(self.qc, 500)
-        self.broker.available[FOO] = Position(FOO, 5, 10)
+        self.broker.Portfolio[FOO] = Position(FOO, 5, 10)
 
     def test_buy_from_avail_portfolio_first(self):
         portfolio = Portfolio(parent=self.qc, cash=100)
@@ -220,11 +220,11 @@ class TestMarketOrders(unittest.TestCase):
 
         # Number of positions in market remains the same (1),
         # but in portfolio increased (0 to 1)
-        self.assertEqual(len(self.broker.available), 1)
+        self.assertEqual(len(self.broker.Portfolio), 1)
         self.assertEqual(len(portfolio), 1)
 
         # Remaining Quantity of position changed.
-        remaining = self.broker.available[FOO].Quantity
+        remaining = self.broker.Portfolio[FOO].Quantity
         used = portfolio[FOO].Quantity
         self.assertEqual(remaining, 3)
         self.assertEqual(used, 2)
@@ -241,12 +241,12 @@ class TestMarketOrders(unittest.TestCase):
 
         # Number of positions in market remains the same (1),
         # but in portfolio increased (0 to 1)
-        self.assertEqual(len(self.broker.available), 1)
+        self.assertEqual(len(self.broker.Portfolio), 1)
         self.assertEqual(len(portfolio), 1) # order was executed
 
         # Remaining Quantity of position changed.
-        self.assertEqual(self.broker.available[FOO].Quantity, 5)
-        self.assertTrue(BAR not in self.broker.available)
+        self.assertEqual(self.broker.Portfolio[FOO].Quantity, 5)
+        self.assertTrue(BAR not in self.broker.Portfolio)
         self.assertEqual(portfolio[BAR].Quantity, 2)
 
 if __name__ == '__main__':

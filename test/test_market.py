@@ -1,5 +1,5 @@
+# pylint: disable=C0111,C0103
 import unittest
-
 
 from mocked import QCAlgorithm, Securities, Security, Symbol
 from market import Portfolio, Position, Broker, Order, OrderType
@@ -53,13 +53,13 @@ class TestPortfolioWithSinglePosition(unittest.TestCase):
     def test_buy_existing_position(self):
         self.Portfolio.fillOrder(FOO, 1, 9)
         self.assertEqual(self.Portfolio[FOO].Quantity, 13)
-        self.assertEqual(self.Portfolio[FOO].cost, 3)
+        self.assertEqual(self.Portfolio[FOO].AveragePrice, 3)
         self.assertEqual(self.Portfolio.Cash, 261)
 
     def test_sell_existing_position(self):
         self.Portfolio.fillOrder(FOO, -1, 3)
         self.assertEqual(self.Portfolio[FOO].Quantity, 11)
-        self.assertEqual(self.Portfolio[FOO].cost, 2.5)
+        self.assertEqual(self.Portfolio[FOO].AveragePrice, 2.5)
         self.assertEqual(self.Portfolio.Cash, 273)
 
     def test_get_allocation_for_existing_position(self):
@@ -116,7 +116,7 @@ class TestPortfolioWithMultiplePositions(unittest.TestCase):
         self.assertEqual(len(self.Portfolio), 2)
         self.assertEqual(self.Portfolio.Cash, 70)
         self.assertEqual(self.Portfolio[BAR].Quantity, 3)
-        self.assertEqual(self.Portfolio[BAR].cost, 100)
+        self.assertEqual(self.Portfolio[BAR].AveragePrice, 100)
 
     def test_sell_existing_position(self):
         self.Portfolio.fillOrder(FOO, -5, 4)
@@ -129,7 +129,7 @@ class TestPortfolioWithMultiplePositions(unittest.TestCase):
         self.assertEqual(len(self.Portfolio), 2)
         self.assertEqual(self.Portfolio.Cash, 370)
         self.assertEqual(self.Portfolio[BAR].Quantity, 1)
-        self.assertEqual(self.Portfolio[BAR].cost, 50)
+        self.assertEqual(self.Portfolio[BAR].AveragePrice, 50)
 
     def test_sell_entire_position(self):
         self.Portfolio.fillOrder(FOO, -12, 4)
@@ -205,7 +205,8 @@ class TestMarketOrders(unittest.TestCase):
     def setUp(self):
         self.qc = QCAlgorithm()
         self.qc.Securities = Securities([(FOO, 2.5)])
-        self.broker = Broker(self.qc, 500)
+        self.broker = Broker(self.qc)
+        self.broker.Cash = 500
         self.broker.Portfolio[FOO] = Position(FOO, 5, 10)
 
     def test_buy_from_avail_portfolio_first(self):

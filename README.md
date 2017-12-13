@@ -38,6 +38,21 @@ Broker: Middleware between Portfolio actions (buy/sell) and Broker/Lean. This la
 
 # TODO
 
-- self.Liquidate(Symbol = None) -> calls Portfolio.Liquidate()
-- self.Transactions
-- load broker current portfolio into Broker.Available
+BUGS
+? Fix trade tags not showing
+
+QUICK
+- Main.SetWarmup() is Max of algos SetWarmup()
+- Trades made in available portfolio should trigger alg.OnOrderHandle
+- self.Liquidate(Symbol = None) -> calls Portfolio.Liquidate(Symbol = None)
+- main.SetCash() sets Broker.portfolio.Cash and raises Exception if sum(algs.Cash)
+
+COMPLEX
+- Consolidate orders at Broker level to minimize unnecessary trades
+- Automatic portfolios' performance plotting
+
+ICEBOX:
+? self.Transactions(?)
+- Add defensive guards all over the code
+- Startup loading of IB portfolio, eg, sets Broker.portfolio.Cash and raises Exception if sum(algs.Cash)
+- Support Virtual Portofio/Alg to protect existing positions

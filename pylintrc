@@ -1,10 +1,4 @@
 
-# More than one statement in a single line
-disable=C0321
-
-# Empty module docstring
-disable=C0112
-
 [MASTER]
 
 # A comma-separated list of package or module names from where C extensions may
@@ -220,7 +214,7 @@ indent-after-paren=4
 indent-string='    '
 
 # Maximum number of characters on a single line.
-max-line-length=100
+max-line-length=110
 
 # Maximum number of lines in a module
 max-module-lines=1000

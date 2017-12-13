@@ -1,9 +1,9 @@
 """
-MD5: 3ef60806d79b3da09837245844020931
+MD5: 3de8aec80dd0378d1b17d95ede39f9f8
 """
 from decimal import Decimal
 
-
+# pylint: disable=C0103,C0325,C0321,R0903,R0201,W0102
 class SecurityType(object):
     Equity = 1
 
@@ -20,7 +20,6 @@ class OrderType(object):
     MarketOnOpen = 5
     MarketOnClose = 6
 
-
 # lean/Common/Orders/OrderTypes.cs
 class OrderStatus(object):
     New = 0,
@@ -32,7 +31,7 @@ class OrderStatus(object):
     Invalid = 7
     CancelPending = 8
 
-class Ticket(object):
+class OrderTicket(object):
     def __init__(self, symbol, quantity, order_type=OrderType.Market,
                  status=OrderStatus.New):
         self.Symbol = symbol
@@ -84,7 +83,11 @@ class Securities(dict):
 class QCAlgorithm(object):
     def __init__(self):
         self.Securities = Securities()
+        self.Portfolio = None
         self.Initialize()
+        self.Transactions = None
+        self.LiveMode = False
+        self.Time = ''
 
     def AddEquity(self, ticker, _resolution): return Security(ticker)
     def Initialize(self): pass
@@ -94,20 +97,16 @@ class QCAlgorithm(object):
     def Log(self, args): print(args)
     def Debug(self, args): self.Log(args)
 
-    def MarketOrder(self, symbol, quantity, tag=""):
-        return Ticket(symbol, quantity, order_type=OrderType.Market,
-                      status=OrderStatus.Filled)
+    def MarketOrder(self, symbol, quantity, _asynchronous, _tag):
+        return OrderTicket(symbol, quantity, order_type=OrderType.Market, status=OrderStatus.Filled)
 
-    def LimitOrder(self, symbol, quantity, _limit_price, tag=""):
-        return Ticket(symbol, quantity, order_type=OrderType.Limit,
-                      status=OrderStatus.Submitted)
+    def LimitOrder(self, symbol, quantity, _limit_price, _tag):
+        return OrderTicket(symbol, quantity, order_type=OrderType.Limit, status=OrderStatus.Submitted)
 
-    def StopMarketOrder(self, symbol, quantity, _stop_price, tag=""):
-        return Ticket(symbol, quantity, order_type=OrderType.StopMarket,
-                      status=OrderStatus.Submitted)
+    def StopMarketOrder(self, symbol, quantity, _stop_price, _tag):
+        return OrderTicket(symbol, quantity, order_type=OrderType.StopMarket, status=OrderStatus.Submitted)
 
-    def StopLimitOrder(self, symbol, quantity, _stop_price, _limit_price, tag=""):
-        return Ticket(symbol, quantity, order_type=OrderType.StopLimit,
-                      status=OrderStatus.Submitted)
+    def StopLimitOrder(self, symbol, quantity, _stop_price, _limit_price, _tag):
+        return OrderTicket(symbol, quantity, order_type=OrderType.StopLimit, status=OrderStatus.Submitted)
 
     def SetWarmUp(self, period): pass

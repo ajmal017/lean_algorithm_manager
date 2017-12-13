@@ -1,39 +1,43 @@
 """
-MD5: 5c52f7da3d0a2776677b287e41c3d6f2
+MD5: 3728ae61236a7980007ce6d4a81b4182
 """
 
+# pylint: disable=C0321
 try: QCAlgorithm
 except NameError: from mocked import OrderType, OrderStatus, Symbol
 
-# pylint: disable=C0111,C0103,C0112,E1136
+# pylint: disable=C0111,C0103,C0112,E1136,R0903,R0913,R0914
 class Position(object):
     def __init__(self, symbol, quantity, price_per_share):
         self.Symbol = symbol
         self.Quantity = float(quantity)
-        self.cost = float(price_per_share)
+        self.AveragePrice = float(price_per_share)
 
     def __str__(self):
-        return "Position(Symbol: %s, Quantity: %f, Cost: %f" % (self.Symbol, self.Quantity, self.cost)
+        return "%s=%.1f $%.2f" % (self.Symbol, self.Quantity, self.TotalCost())
+
+    def TotalCost(self):
+        return self.Quantity * self.AveragePrice
 
     def fill(self, quantity, price_per_share=None):
         if quantity < 0:
-            price_per_share = self.cost
+            price_per_share = self.AveragePrice
         self.__fill(quantity, price_per_share)
 
     def __fill(self, quantity, price_per_share):
         denominator = self.Quantity + quantity
         if denominator == 0:
-            self.cost = 0
+            self.AveragePrice = 0
             self.Quantity = 0
             return
-        old_sum = self.Quantity * self.cost
+        old_sum = self.Quantity * self.AveragePrice
         new_sum = (old_sum + quantity * price_per_share)
-        self.cost = new_sum / denominator
+        self.AveragePrice = new_sum / denominator
         self.Quantity += quantity
 
 
 class Portfolio(dict):
-    def __init__(self, parent, cash):
+    def __init__(self, parent, cash=0):
         super(Portfolio, self).__init__()
         self._parent = parent
         self.Cash = cash
@@ -43,6 +47,13 @@ class Portfolio(dict):
             return any(self)
         else:
             raise AttributeError, attr
+
+    def __str__(self):
+        sb = []
+        for _, pos in self.iteritems():
+            sb.append(str(pos))
+        return '(' + '), ('.join(sb) + ')'
+
 
     def fillOrder(self, symbol, quantity, price_per_share):
         """Used by Broker."""
@@ -65,10 +76,10 @@ class Portfolio(dict):
         return self.Cash + shares
 
     def getTotalCost(self):
-        shares = sum([pos.Quantity * pos.cost for symb, pos in self.iteritems()])
+        shares = sum([pos.Quantity * pos.AveragePrice for _symb, pos in self.iteritems()])
         return self.Cash + shares
 
-    def getOrdersForTargetAllocation(self, symbol, target_alloc):
+    def getOrdersForTargetAllocation(self, symbol, target_alloc, tag=""):
         orders = []
 
         if not isinstance(symbol, Symbol): import ipdb; ipdb.set_trace()
@@ -81,7 +92,7 @@ class Portfolio(dict):
 
         need_to_buy_value = target_value - current_value
         need_to_buy_qty = need_to_buy_value / price_per_share
-        order = Order(self, symbol, need_to_buy_qty)
+        order = Order(self, symbol, need_to_buy_qty, tag=tag)
         orders.append(order)
 
         remaining_cash = self.Cash - need_to_buy_value
@@ -97,7 +108,7 @@ class Portfolio(dict):
                 if symb != symbol:
                     new_qty = multiplier * pos.Quantity
                     order_qty = new_qty - pos.Quantity
-                    order = Order(self, symb, order_qty)
+                    order = Order(self, symb, order_qty, tag=tag)
                     orders.append(order)
 
         return orders
@@ -125,22 +136,38 @@ class Order(object):
         self.tag = tag
 
     @classmethod
-    def TypeToString(cls, type):
-        if type is OrderType.Market: return "market"
-        elif type is OrderType.Limit: return "Limit"
-        elif type is OrderType.StopMarket: return "StopMarket"
-        elif type is OrderType.StopMarket: return "StopMarket"
-        else: return "?????"
+    def TypeToString(cls, order_type):
+        if order_type is OrderType.Market: return "Market"
+        elif order_type is OrderType.Limit: return "Limit"
+        elif order_type is OrderType.StopMarket: return "StopMarket"
+        elif order_type is OrderType.StopLimit: return "StopLimit"
+        # else: return "?????"
 
     def __str__(self):
-        return "Order(Symbol: %s, Quantity: %f, Type: %s)" % (self.Symbol, self.Quantity, Order.TypeToString(self.Type))
+        return "%sOrder: %s=%.1f" % (Order.TypeToString(self.Type), self.Symbol, self.Quantity)
 
 
 class Broker(object):
-    def __init__(self, parent, cash):
+    def __init__(self, parent):
         self._parent = parent
-        self.Portfolio = Portfolio(parent=parent, cash=cash)
+        self.Portfolio = Portfolio(parent)
         self.orders = []
+        self.submitted = {}
+        if self._parent.LiveMode:
+            self._loadFromBroker()
+
+
+    def _loadFromBroker(self):
+        self.Portfolio.Cash = self._parent.Portfolio.Cash
+        if self._parent.Portfolio.Invested:
+            self._parent.Debug("updateBroker")
+            positions = [x for x in self._parent.Portfolio.Securities
+                         if x.Value.Holdings.AbsoluteQuantity != 0]
+            for position in positions:
+                cost = float(position.Value.Holdings.AveragePrice)
+                qty = float(position.Value.Holdings.AbsoluteQuantity)
+                symb = position.Key
+                self.Portfolio[symb] = Position(symb, qty, cost)
 
     def addOrder(self, order):
         self.orders.append(order)
@@ -183,29 +210,26 @@ class Broker(object):
             symb = order.Symbol
             qty = int(order.Quantity)
             self._parent.Debug("Converting quantity to %d" % qty)
+            self._parent.Debug("Submitting %s" % order)
 
             # Submit order.
             if order.Type == OrderType.Market:
-                ticket = self._parent.MarketOrder(
-                    symb, qty, tag=order.tag)
+                ticket = self._parent.MarketOrder(symb, qty, False, order.tag)
             elif order.Type == OrderType.Limit:
-                ticket = self._parent.LimitOrder(
-                    symb, qty, order.LimitPrice, tag=order.tag)
+                ticket = self._parent.LimitOrder(symb, qty, order.LimitPrice, order.tag)
             elif order.Type == OrderType.StopMarket:
-                ticket = self._parent.StopMarketOrder(
-                    symb, qty, order.StopPrice, tag=order.tag)
+                ticket = self._parent.StopMarketOrder(symb, qty, order.StopPrice, order.tag)
             elif order.Type == OrderType.StopLimit:
-                ticket = self._parent.StopLimitOrder(
-                    symb, qty, order.StopPrice, order.LimitPrice, tag=order.tag)
+                ticket = self._parent.StopLimitOrder(symb, qty, order.StopPrice, order.LimitPrice, order.tag)
 
             # Check order status.
             if ticket.Status in [OrderStatus.Filled, OrderStatus.PartiallyFilled]:
-                self._parent.Debug("Filled (partially? %s)" % (
-                    ticket.Status == OrderStatus.PartiallyFilled))
-                order.Portfolio.fillOrder(order.Symbol, float(ticket.FillQuantity),
-                                          float(ticket.FillPrice))
+                partial = "Partially" if ticket.Status == OrderStatus.PartiallyFilled else "Completely"
+                self._parent.Debug("%s Filled" % (partial))
+                order.Portfolio.fillOrder(order.Symbol, float(ticket.FillQuantity), float(ticket.FillPrice))
             elif ticket.Status in [OrderStatus.New, OrderStatus.Submitted]:
-                pass
+                self.submitted[ticket.OrderId] = order
+
             elif ticket.Status in [OrderStatus.Canceled, OrderStatus.CancelPending]:
                 self._parent.Debug("Canceled/CancelPending")
             else:

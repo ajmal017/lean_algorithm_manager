@@ -15,7 +15,7 @@ class MyAlgos(AlgorithmManager):
 
         self.registerBroker(Broker(self))
         self.registerAlgorithms([
-            Algorithm1(self, broker=self.broker, cash=10000, name="Algorithm1"),
-            Algorithm2(self, broker=self.broker, cash=20000, name="Algorithm2"),
-            Algorithm3(self, broker=self.broker, cash=30000, name="Algorithm3")
+            Algorithm1(self, broker=self._broker, cash=10000, name="Algorithm1"),
+            Algorithm2(self, broker=self._broker, cash=20000, name="Algorithm2"),
+            Algorithm3(self, broker=self._broker, cash=30000, name="Algorithm3")
         ])

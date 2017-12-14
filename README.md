@@ -36,32 +36,3 @@ Position: current position (long/short) in a given Portfolio. Globally, we can h
 Broker: Middleware between Portfolio actions (buy/sell) and Broker/Lean. This layer manages the overall positions across all algorithms. On startup, it loads the existing real brokers positions, which are made available before actually buying real positions. Might minimize buy/sell if they happen to match across algorithms.
 
 
-# TODO
-
-- main.SetCash() sets Broker.portfolio.Cash and raises Exception if sum(algs.Cash)
-
-BUGS
-
-QUICK
-- Main.SetWarmup() is Max of algos SetWarmup()
-- Trades made in available portfolio should trigger alg.OnOrderHandle
-- self.Liquidate(Symbol = None) -> calls Portfolio.Liquidate(Symbol = None)
-- Spike on how best way to provide Defensive code
-
-COMPLEX
-- Consolidate orders at Broker level to minimize unnecessary trades
-- Automatic portfolios' performance plotting
-
-ICEBOX:
-? self.Transactions(?)
-- Add defensive guards all over the code
-- Support Virtual Portofio/Alg to protect existing positions
-
-___________________________________________________________
-DONE
-x Fix trade tags not showing
-x Startup loading of Read portfolio, eg, sets Broker.portfolio.Cash and imports all current position.
-    x Raise Exception if self.Portfolio.TotalValue < sum(algs.Cash)
-
-
-self.Liquidate()

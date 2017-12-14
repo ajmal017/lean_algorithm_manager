@@ -1,5 +1,5 @@
 """
-MD5: cdea1396a255294ad062b8ac67257bb6
+MD5: 2cc74b938279393c6eeab69f2a294fef
 """
 
 # pylint: disable=C0321
@@ -37,9 +37,10 @@ class Position(object):
 
 
 class Portfolio(dict):
-    def __init__(self, parent, cash=0):
+    def __init__(self, parent, broker, cash=0):
         super(Portfolio, self).__init__()
-        self._parent = parent
+        self.__parent = parent
+        self.__broker = broker
         self.Cash = cash
 
     def __getattr__(self, attr):
@@ -70,8 +71,20 @@ class Portfolio(dict):
         elif remaining_quantity == 0:
             self.pop(symbol)
 
+    def addOrder(self, order):
+        return self.__broker.addOrder(order)
+
+    def Liquidate(self, symbol=None, tag=''):
+        if symbol not in self:
+            symbols = [sym for sym, pos in self.iteritems() if pos.Quantity > 0]
+            for s in symbols:
+                self.Liquidate(s)
+        else:
+            order = Order(self, symbol, -self[symbol].Quantity, tag=tag)
+            self.__broker.addOrder(order)
+
     def getTotalValue(self):
-        shares = sum([pos.Quantity * float(self._parent.Securities[symb].Price)
+        shares = sum([pos.Quantity * float(self.__parent.Securities[symb].Price)
                       for symb, pos in self.iteritems()])
         return self.Cash + shares
 
@@ -83,7 +96,7 @@ class Portfolio(dict):
         orders = []
 
         old_qty = self[symbol].Quantity if symbol in self else 0.0
-        price_per_share = float(self._parent.Securities[symbol].Price)
+        price_per_share = float(self.__parent.Securities[symbol].Price)
         current_total_value = self.getTotalValue()
         target_value = float(target_alloc) * current_total_value
         current_value = old_qty * price_per_share
@@ -113,16 +126,13 @@ class Portfolio(dict):
     def getCurrentAllocation(self, symbol):
         if symbol not in self: return 0.0
         shares_qty = self[symbol].Quantity
-        price_per_share = float(self._parent.Securities[symbol].Price)
+        price_per_share = float(self.__parent.Securities[symbol].Price)
         return (shares_qty * price_per_share) / self.getTotalValue()
 
 
 class Order(object):
     def __init__(self, portfolio, symbol, quantity, order_type=OrderType.Market,
                  limit_price=None, stop_price=None, tag=""):
-        if not isinstance(symbol, Symbol):
-            import ipdb
-            ipdb.set_trace()
         self.Portfolio = portfolio
         self.Symbol = symbol
         self.Quantity = quantity
@@ -131,6 +141,7 @@ class Order(object):
         self.Type = order_type
         # self.Status = status
         self.tag = tag
+        self.Ticket = None
 
     @classmethod
     def TypeToString(cls, order_type):
@@ -146,19 +157,18 @@ class Order(object):
 
 class Broker(object):
     def __init__(self, parent):
-        self._parent = parent
-        self.Portfolio = Portfolio(parent)
-        self.orders = []
+        self.__parent = parent
+        self.Portfolio = Portfolio(parent, self)
+        self.__to_submit = []
         self.submitted = {}
-        if self._parent.LiveMode:
-            self.loadFromBroker()
+        if self.__parent.LiveMode:
+            self.__loadFromBroker()
 
 
-    def loadFromBroker(self):
-        self.Portfolio.Cash = self._parent.Portfolio.Cash
-        if self._parent.Portfolio.Invested:
-            self._parent.Debug("updateBroker")
-            positions = [x for x in self._parent.Portfolio.Securities
+    def __loadFromBroker(self):
+        if self.__parent.Portfolio.Invested:
+            self.__parent.Debug("updateBroker")
+            positions = [x for x in self.__parent.Portfolio.Securities
                          if x.Value.Holdings.AbsoluteQuantity != 0]
             for position in positions:
                 cost = float(position.Value.Holdings.AveragePrice)
@@ -170,74 +180,82 @@ class Broker(object):
 
     def selfCheck(self):
         real_funds = self.Portfolio.getTotalValue()
-        virtual_funds = sum(x.Portfolio.getTotalValue() for x in self._parent.algorithms)
+        virtual_funds = sum(x.Portfolio.getTotalValue() for x in self.__parent.algorithms)
         if virtual_funds > real_funds:
             raise Exception("Insufficient funds in real portfolio ($%.2f) "
                             "to support running algorithms ($%.2f)." % (real_funds, virtual_funds))
 
-
     def addOrder(self, order):
-        self.orders.append(order)
+        self.__to_submit.append(order)
         return order
 
     def executeOrders(self):
         self.__executeOrdersOnUnusedPortfolio()
         self.__executeOrdersOnBroker()
 
+    def __minimizeOrders(self):
+        pass
+
     def __executeOrdersOnUnusedPortfolio(self):
         remaining_orders = []
-        for order in self.orders:
+        for order in self.__to_submit:
             symbol = order.Symbol
             if order.Type == OrderType.Market and \
                 order.Symbol in self.Portfolio:
                 position = self.Portfolio[symbol]
 
                 avail_qty = position.Quantity
-                price = float(self._parent.Securities[symbol].Price)
+                price = float(self.__parent.Securities[symbol].Price)
 
                 if order.Quantity < avail_qty:
-                    self.Portfolio.fillOrder(symbol, -order.Quantity, price)
                     order.Portfolio.fillOrder(symbol, order.Quantity, price)
+                    self.Portfolio.fillOrder(symbol, -order.Quantity, price)
                     continue
                 else:
-                    self.Portfolio.fillOrder(symbol, -avail_qty, price)
                     order.Portfolio.fillOrder(symbol, avail_qty, price)
+                    self.Portfolio.fillOrder(symbol, -avail_qty, price)
                     order.Quantity -= avail_qty
 
             remaining_orders.append(order)
 
-        self.orders = remaining_orders
+        self.Portfolio.Cash = 0
+        self.__to_submit = remaining_orders
 
 
     def __executeOrdersOnBroker(self):
-        while any(self.orders):
-            order = self.orders.pop()
-            self._parent.Debug("Handling %s" % order)
+        while any(self.__to_submit):
+            order = self.__to_submit.pop()
+            self.__parent.Debug("Handling %s" % order)
 
             symb = order.Symbol
             qty = int(order.Quantity)
-            self._parent.Debug("Converting quantity to %d" % qty)
-            self._parent.Debug("Submitting %s" % order)
+            self.__parent.Debug("Converting quantity to %d" % qty)
+            self.__parent.Debug("Submitting %s" % order)
 
             # Submit order.
             if order.Type == OrderType.Market:
-                ticket = self._parent.MarketOrder(symb, qty, False, order.tag)
+                ticket = self.__parent.MarketOrder(symb, qty, False, order.tag)
             elif order.Type == OrderType.Limit:
-                ticket = self._parent.LimitOrder(symb, qty, order.LimitPrice, order.tag)
+                ticket = self.__parent.LimitOrder(symb, qty, order.LimitPrice, order.tag)
             elif order.Type == OrderType.StopMarket:
-                ticket = self._parent.StopMarketOrder(symb, qty, order.StopPrice, order.tag)
+                ticket = self.__parent.StopMarketOrder(symb, qty, order.StopPrice, order.tag)
             elif order.Type == OrderType.StopLimit:
-                ticket = self._parent.StopLimitOrder(symb, qty, order.StopPrice, order.LimitPrice, order.tag)
+                ticket = self.__parent.StopLimitOrder(symb, qty, order.StopPrice, order.LimitPrice, order.tag)
+
+            # Update order with ticket.
+            order.Ticket = ticket
+            self.submitted[ticket.OrderId] = order
 
             # Check order status.
-            if ticket.Status in [OrderStatus.Filled, OrderStatus.PartiallyFilled]:
-                partial = "Partially" if ticket.Status == OrderStatus.PartiallyFilled else "Completely"
-                self._parent.Debug("%s Filled" % (partial))
-                order.Portfolio.fillOrder(order.Symbol, float(ticket.FillQuantity), float(ticket.FillPrice))
-            elif ticket.Status in [OrderStatus.New, OrderStatus.Submitted]:
-                self.submitted[ticket.OrderId] = order
+            # if ticket.Status in [OrderStatus.Filled, OrderStatus.PartiallyFilled]:
+            #     partial = "Partially" if ticket.Status == OrderStatus.PartiallyFilled else "Completely"
+            #     self.__parent.Debug("%s Filled" % (partial))
+            #     order.Portfolio.fillOrder(order.Symbol, float(ticket.FillQuantity), float(ticket.FillPrice))
 
-            elif ticket.Status in [OrderStatus.Canceled, OrderStatus.CancelPending]:
-                self._parent.Debug("Canceled/CancelPending")
-            else:
-                raise Exception('%s: %s (Invalid!)' % (order, ticket.ToString()))
+            # elif ticket.Status in [OrderStatus.New, OrderStatus.Submitted]:
+            #     self.submitted[ticket.OrderId] = order
+
+            # elif ticket.Status in [OrderStatus.Canceled, OrderStatus.CancelPending]:
+            #     self.__parent.Debug("Canceled/CancelPending")
+            # else:
+            #     raise Exception('%s: %s (Invalid!)' % (order, ticket.ToString()))

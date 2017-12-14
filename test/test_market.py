@@ -2,7 +2,7 @@
 import unittest
 
 from mocked import QCAlgorithm, Securities, Security, Symbol
-from market import Portfolio, Position, Broker, Order, OrderType
+from market import Portfolio, Position, Broker, Order, OrderType, OrderStatus
 
 
 def order_qty(orders, symbol):
@@ -14,12 +14,13 @@ FOO = Symbol('foo')
 BAR = Symbol('bar')
 XYZ = Symbol('xyz')
 
-
 class TestEmpyPortfolio(unittest.TestCase):
     def setUp(self):
         self.qc = QCAlgorithm()
         self.qc.Securities = Securities([(FOO, 5), (BAR, 50)])
-        self.Portfolio = Portfolio(parent=self.qc, cash=100)
+        self.broker = Broker(self.qc)
+        self.qc.registerBroker(self.broker)
+        self.Portfolio = Portfolio(parent=self.qc, broker=self.broker, cash=100)
 
     def test_total_value(self):
         self.assertEqual(self.Portfolio.getTotalValue(), 100)
@@ -37,18 +38,48 @@ class TestEmpyPortfolio(unittest.TestCase):
         self.assertEqual(len(orders), 1)
         self.assertEqual(order_qty(orders, FOO), 12.2)
 
+    def test_liquidate_all(self):
+        self.Portfolio.Liquidate()
+        self.broker.executeOrders()
+        self.assertEqual(self.Portfolio.getTotalValue(), 100)
+        self.assertEqual(self.Portfolio.Cash, 100)
+
+    def test_liquidate_security(self):
+        self.Portfolio.Liquidate(FOO)
+        self.broker.executeOrders()
+        self.assertEqual(self.Portfolio.getTotalValue(), 100)
+        self.assertEqual(self.Portfolio.Cash, 100)
+
 
 class TestPortfolioWithSinglePosition(unittest.TestCase):
     def setUp(self):
-        self.qc = QCAlgorithm()
+        self.qc = QCAlgorithm(default_order_status=OrderStatus.Filled)
         self.qc.Securities = Securities([(FOO, 2.5), (BAR, 10)])
-        self.Portfolio = Portfolio(parent=self.qc, cash=270)
+        self.broker = Broker(self.qc)
+        self.qc.registerBroker(self.broker)
+        self.Portfolio = Portfolio(parent=self.qc, broker=self.broker, cash=270)
         self.Portfolio[FOO] = Position(FOO, 12, 2.5)
 
     def test_total_value(self):
         self.assertEqual(self.Portfolio.getTotalValue(), 300)
         self.qc.Securities[FOO] = Security(FOO, price=3)
         self.assertEqual(self.Portfolio.getTotalValue(), 306)
+
+    def test_liquidate_all(self):
+        self.Portfolio.Liquidate()
+        self.broker.executeOrders()
+        self.qc.SetOrderStatus(OrderStatus.Filled)
+        profit = 12 * 2.5
+        self.assertEqual(self.Portfolio.getTotalValue(), 270 + profit)
+        self.assertEqual(self.Portfolio.Cash, 270 + profit)
+
+    def test_liquidate_security(self):
+        self.Portfolio.Liquidate(FOO)
+        self.broker.executeOrders()
+        self.qc.SetOrderStatus(OrderStatus.Filled)
+        profit = 12 * 2.5
+        self.assertEqual(self.Portfolio.getTotalValue(), 270 + profit)
+        self.assertEqual(self.Portfolio.Cash, 270 + profit)
 
     def test_buy_existing_position(self):
         self.Portfolio.fillOrder(FOO, 1, 9)
@@ -96,14 +127,32 @@ class TestPortfolioWithSinglePosition(unittest.TestCase):
 
 class TestPortfolioWithMultiplePositions(unittest.TestCase):
     def setUp(self):
-        self.qc = QCAlgorithm()
+        self.qc = QCAlgorithm(default_order_status=OrderStatus.Filled)
         self.qc.Securities = Securities([(FOO, 2.5), (BAR, 50)])
-        self.Portfolio = Portfolio(parent=self.qc, cash=270)
+        self.broker = Broker(self.qc)
+        self.qc.registerBroker(self.broker)
+        self.Portfolio = Portfolio(parent=self.qc, broker=self.broker, cash=270)
         self.Portfolio[FOO] = Position(FOO, 12, 2.5) # 30
         self.Portfolio[BAR] = Position(BAR, 2, 50) # 100
 
     def test_total_value(self):
         self.assertEqual(self.Portfolio.getTotalValue(), 400)
+
+    def test_liquidate_all(self):
+        self.Portfolio.Liquidate()
+        self.broker.executeOrders()
+        self.qc.SetOrderStatus(OrderStatus.Filled)
+        profit = 12 * 2.5 + 2 * 50
+        self.assertEqual(self.Portfolio.getTotalValue(), 270 + profit)
+        self.assertEqual(self.Portfolio.Cash, 270 + profit)
+
+    def test_liquidate_security(self):
+        self.Portfolio.Liquidate(FOO)
+        self.broker.executeOrders()
+        self.qc.SetOrderStatus(OrderStatus.Filled)
+        profit = 12 * 2.5
+        self.assertEqual(self.Portfolio.getTotalValue(), 270 + 100 + profit)
+        self.assertEqual(self.Portfolio.Cash, 270 + profit)
 
     def test_buy_new_position(self):
         self.Portfolio.fillOrder('abc', 10, 20)
@@ -156,7 +205,9 @@ class TestComplexTargetAllocations(unittest.TestCase):
             (BAR, self.price[BAR]),
             (XYZ, self.price[XYZ])
         ])
-        self.Portfolio = Portfolio(parent=self.qc, cash=100)
+        self.broker = Broker(self.qc)
+        self.qc.registerBroker(self.broker)
+        self.Portfolio = Portfolio(parent=self.qc, broker=self.broker, cash=100)
         self.Portfolio.Cash = 40
 
     def test_target_allocation_in_portfolio_for_new_position_that_should_cause_a_sell(self):
@@ -201,54 +252,75 @@ class TestComplexTargetAllocations(unittest.TestCase):
         self.assertAlmostEqual(order_qty(orders, XYZ), 3.33, places=2)
 
 
+from algorithm_manager import AlgorithmManager as QCAlgorithm
+
 class TestMarketOrders(unittest.TestCase):
     def setUp(self):
         self.qc = QCAlgorithm()
-        self.qc.Securities = Securities([(FOO, 2.5)])
+        self.qc.Securities = Securities([(FOO, 1), (BAR, 10), (XYZ, 100)])
         self.broker = Broker(self.qc)
-        self.broker.Cash = 500
-        self.broker.Portfolio[FOO] = Position(FOO, 5, 10)
+        self.qc.registerBroker(self.broker)
+        self.broker.Portfolio.Cash = 0
+        self.broker.Portfolio = Portfolio(parent=self.qc, broker=self.broker)
+        self.broker.Portfolio[FOO] = Position(FOO, 100, 1)
+        self.broker.Portfolio[BAR] = Position(BAR, 10, 10)
 
-    def test_buy_from_avail_portfolio_first(self):
-        portfolio = Portfolio(parent=self.qc, cash=100)
-        order = Order(portfolio, FOO, 2, order_type=OrderType.Market)
+        self.portfolio = Portfolio(parent=self.qc, broker=self.broker, cash=200)
+        self.qc.registerBroker(self.broker)
+        self.qc.registerAlgorithms([self.portfolio])
+
+    def assert_portfolio(self, portfolio, cash, args):
+        self.assertEqual(portfolio.Cash, cash)
+        for symb, qty in args.iteritems():
+            if qty == 0:
+                self.assertTrue(symb not in portfolio)
+            else:
+                self.assertEqual(portfolio[symb].Quantity, qty)
+
+    def assert_orders(self, transactions, args):
+        self.assertEqual(len(transactions), len(args))
+        orders = [(x.Symbol, x.Quantity, x.Type) for x in transactions.values()]
+        for symb, qty in args.iteritems():
+            if qty == 0:
+                self.assertTrue(symb not in transactions)
+            else:
+                self.assertTrue((symb, qty, OrderType.Market) in orders)
+
+
+    def test_initial_state(self):
+        self.assert_portfolio(self.broker.Portfolio, 0, {FOO:100, BAR:10, XYZ:0})
+        self.assert_portfolio(self.portfolio, 200, {FOO: 0, BAR: 0, XYZ: 0})
+
+        # Remaining orders that are submitted to real broker.
+        self.assertEqual(len(self.qc.Transactions), 0)
+
+    def test_buying_existing_stock_in_available_portfolio(self):
+        order = Order(self.portfolio, FOO, 2, order_type=OrderType.Market)
+
+        # Adding and executing order.
         self.broker.addOrder(order)
-
-        # Execure orders.
-        self.assertEqual(len(self.broker.orders), 1)
         self.broker.executeOrders()
-        self.assertEqual(len(self.broker.orders), 0)
+        self.assert_portfolio(self.broker.Portfolio, 0, {FOO: 98, BAR: 10, XYZ: 0})
+        self.assert_portfolio(self.portfolio, 198, {FOO: 2, BAR: 0, XYZ: 0})
+        self.assert_orders(self.qc.Transactions, {})
 
-        # Number of positions in market remains the same (1),
-        # but in portfolio increased (0 to 1)
-        self.assertEqual(len(self.broker.Portfolio), 1)
-        self.assertEqual(len(portfolio), 1)
+    def test_buying_ineexisting_stock_in_available_portfolio(self):
+        order = Order(self.portfolio, XYZ, 1, order_type=OrderType.Market)
 
-        # Remaining Quantity of position changed.
-        remaining = self.broker.Portfolio[FOO].Quantity
-        used = portfolio[FOO].Quantity
-        self.assertEqual(remaining, 3)
-        self.assertEqual(used, 2)
-
-    def test_buy_from_broker_last(self):
-        portfolio = Portfolio(parent=self.qc, cash=100)
-        order = Order(portfolio, BAR, 2, order_type=OrderType.Market)
+        # Adding and executing order.
         self.broker.addOrder(order)
-
-        # Execure orders.
-        self.assertEqual(len(self.broker.orders), 1)
         self.broker.executeOrders()
-        self.assertEqual(len(self.broker.orders), 0)
+        self.assert_portfolio(self.broker.Portfolio, 0, {FOO:100, BAR:10, XYZ:0})
+        self.assert_portfolio(self.portfolio, 200, {FOO: 0, BAR: 0, XYZ: 0})
+        self.assert_orders(self.qc.Transactions, {XYZ:1})
+        self.assert_orders(self.broker.submitted, {XYZ: 1})
 
-        # Number of positions in market remains the same (1),
-        # but in portfolio increased (0 to 1)
-        self.assertEqual(len(self.broker.Portfolio), 1)
-        self.assertEqual(len(portfolio), 1) # order was executed
+        # Fill order.
+        self.qc.SetOrderStatus(OrderStatus.Filled, order)
+        self.assert_orders(self.broker.submitted, {})
+        self.assert_portfolio(self.broker.Portfolio, 0, {FOO:100, BAR:10, XYZ:0})
+        self.assert_portfolio(self.portfolio, 100, {FOO:0, BAR:0, XYZ:1})
 
-        # Remaining Quantity of position changed.
-        self.assertEqual(self.broker.Portfolio[FOO].Quantity, 5)
-        self.assertTrue(BAR not in self.broker.Portfolio)
-        self.assertEqual(portfolio[BAR].Quantity, 2)
 
 if __name__ == '__main__':
     unittest.main()

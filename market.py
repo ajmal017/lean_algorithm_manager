@@ -1,5 +1,5 @@
 """
-MD5: 3728ae61236a7980007ce6d4a81b4182
+MD5: cdea1396a255294ad062b8ac67257bb6
 """
 
 # pylint: disable=C0321
@@ -82,8 +82,6 @@ class Portfolio(dict):
     def getOrdersForTargetAllocation(self, symbol, target_alloc, tag=""):
         orders = []
 
-        if not isinstance(symbol, Symbol): import ipdb; ipdb.set_trace()
-
         old_qty = self[symbol].Quantity if symbol in self else 0.0
         price_per_share = float(self._parent.Securities[symbol].Price)
         current_total_value = self.getTotalValue()
@@ -96,7 +94,6 @@ class Portfolio(dict):
         orders.append(order)
 
         remaining_cash = self.Cash - need_to_buy_value
-
 
         # Might need to make enough cash on remaining securities.
         if remaining_cash < 0.0:
@@ -154,10 +151,10 @@ class Broker(object):
         self.orders = []
         self.submitted = {}
         if self._parent.LiveMode:
-            self._loadFromBroker()
+            self.loadFromBroker()
 
 
-    def _loadFromBroker(self):
+    def loadFromBroker(self):
         self.Portfolio.Cash = self._parent.Portfolio.Cash
         if self._parent.Portfolio.Invested:
             self._parent.Debug("updateBroker")
@@ -168,6 +165,16 @@ class Broker(object):
                 qty = float(position.Value.Holdings.AbsoluteQuantity)
                 symb = position.Key
                 self.Portfolio[symb] = Position(symb, qty, cost)
+
+        self.selfCheck()
+
+    def selfCheck(self):
+        real_funds = self.Portfolio.getTotalValue()
+        virtual_funds = sum(x.Portfolio.getTotalValue() for x in self._parent.algorithms)
+        if virtual_funds > real_funds:
+            raise Exception("Insufficient funds in real portfolio ($%.2f) "
+                            "to support running algorithms ($%.2f)." % (real_funds, virtual_funds))
+
 
     def addOrder(self, order):
         self.orders.append(order)

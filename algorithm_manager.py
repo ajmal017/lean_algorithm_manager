@@ -1,5 +1,5 @@
 """
-MD5: 114ba1ade6f5683465320cea57a4b3d3
+MD5: 45fb6321a86564afd947506e63cb5444
 """
 
 # pylint: disable=C0321,C0111,W0201,C0413
@@ -55,7 +55,7 @@ class AlgorithmManager(QCAlgorithm):
         self.__pre()
         for alg in self.algorithms:
             alg.OnEndOfDay()
-            self.Debug(str(alg))
+            # self.Debug(str(alg))
         self.__post()
 
     def OnEndOfAlgorithm(self):

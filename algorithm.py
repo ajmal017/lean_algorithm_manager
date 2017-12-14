@@ -1,5 +1,5 @@
 """
-MD5: 00ff21432b8a7f988cda518368dd6171
+MD5: 7ea8d5fe1a5a1a4741bff19a17029fb5
 """
 
 # pylint: disable=C0321,C0103,W0613,R0201,R0913
@@ -11,41 +11,18 @@ from market import Order, Portfolio
 class Algorithm(object):
 
     # Methods to ignore.
-    IGNORED_METHODS = ['Initialize', 'SetCash', 'SetStartDate', 'SetEndDate']
     def __getattr__(self, attr):
         """Delegate everything else to parent."""
-        if attr in Algorithm.IGNORED_METHODS:
-            self.Debug("%s -- call ignored" % attr)
-            return self.dummy.__call__
-        elif hasattr(self._parent, attr):
-            if attr != 'Time':
-                self.Debug("%s" % attr)
+        if hasattr(self._parent, attr):
             return getattr(self._parent, attr)
         else:
             raise AttributeError, attr
-
-    def dummy(self, *args, **kwargs):
-        pass
-
-    def Log(self, data): self._parent.Log("%s - %s - %s" % (self.Time, self._name, data))
-    def Debug(self, data): self._parent.Debug("%s - %s - %s" % (self.Time, self._name, data))
-    # def Initialize(self): pass
-    def CoarseSelectionFunction(self, coarse): return []
-    def FineSelectionFunction(self, fine): return []
-    def OnData(self, args): pass
-    def OnDividend(self): pass
-    def OnEndOfDay(self): pass
-    def OnEndOfAlgorithm(self): pass
-    def OnSecuritiesChanged(self, changes): pass
 
     def __init__(self, parent, broker, cash, name="anonymous"):
         self._parent = parent
         self.broker = broker
         self._name = name
-
-        # Override QuantConnect's Portfolio
         self.Portfolio = Portfolio(parent=parent, cash=cash)
-
         self.Initialize()
 
     def __str__(self):
@@ -55,6 +32,23 @@ class Algorithm(object):
         return "%s: %s" % (self._name, tag) if tag else self._name
 
     ######################################################################
+    def CoarseSelectionFunction(self, coarse): return []
+    def FineSelectionFunction(self, fine): return []
+    def OnData(self, args): pass
+    def OnDividend(self): pass
+    def OnEndOfDay(self): pass
+    def OnEndOfAlgorithm(self): pass
+    def OnSecuritiesChanged(self, changes): pass
+    def Initialize(self): pass
+    def SetStartDate(self, *args, **kwargs): pass
+    def SetEndDate(self, *args, **kwargs): pass
+    def SetCash(self, cash): pass
+
+    def Log(self, data):
+        self._parent.Log("%s - %s - %s" % (self.Time, self._name, data))
+
+    def Debug(self, data):
+        self._parent.Debug("%s - %s - %s" % (self.Time, self._name, data))
 
     def SetHoldings(self, symbol, target_allocation, liquidate_existing_holdings=False, tag=""):
         orders = self.Portfolio.getOrdersForTargetAllocation(symbol, target_allocation, tag=self._tag(tag))

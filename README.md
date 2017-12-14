@@ -38,14 +38,15 @@ Broker: Middleware between Portfolio actions (buy/sell) and Broker/Lean. This la
 
 # TODO
 
+- main.SetCash() sets Broker.portfolio.Cash and raises Exception if sum(algs.Cash)
+
 BUGS
-? Fix trade tags not showing
 
 QUICK
 - Main.SetWarmup() is Max of algos SetWarmup()
 - Trades made in available portfolio should trigger alg.OnOrderHandle
 - self.Liquidate(Symbol = None) -> calls Portfolio.Liquidate(Symbol = None)
-- main.SetCash() sets Broker.portfolio.Cash and raises Exception if sum(algs.Cash)
+- Spike on how best way to provide Defensive code
 
 COMPLEX
 - Consolidate orders at Broker level to minimize unnecessary trades
@@ -54,5 +55,13 @@ COMPLEX
 ICEBOX:
 ? self.Transactions(?)
 - Add defensive guards all over the code
-- Startup loading of IB portfolio, eg, sets Broker.portfolio.Cash and raises Exception if sum(algs.Cash)
 - Support Virtual Portofio/Alg to protect existing positions
+
+___________________________________________________________
+DONE
+x Fix trade tags not showing
+x Startup loading of Read portfolio, eg, sets Broker.portfolio.Cash and imports all current position.
+    x Raise Exception if self.Portfolio.TotalValue < sum(algs.Cash)
+
+
+self.Liquidate()

@@ -1,9 +1,12 @@
 """
-MD5: 08f9e4fc084a1643e22ec4d8ac5eb607
+MD5: a31e1f00c11da8ef0010e57d00540e41
 """
 from decimal import Decimal
 
-# pylint: disable=C0103,C0325,C0321,R0903,R0201,W0102
+# pylint: disable=C0103,C0325,C0321,R0903,R0201,W0102,R0902,R0913,R0904
+class Market(object):
+    USA = 1
+
 class SecurityType(object):
     Equity = 1
 
@@ -12,6 +15,8 @@ class Resolution(object):
     Minute = 2
     Second = 3
 
+
+# lean/Common/Orders/OrderTypes.cs
 class OrderType(object):
     Market = 1
     Limit = 2
@@ -19,8 +24,18 @@ class OrderType(object):
     StopLimit = 4
     MarketOnOpen = 5
     MarketOnClose = 6
+    OptionExercise = 7
 
-# lean/Common/Orders/OrderTypes.cs
+    @classmethod
+    def TypeToString(cls, order_type):
+        if order_type is OrderType.Market: return "Market"
+        elif order_type is OrderType.Limit: return "Limit"
+        elif order_type is OrderType.StopMarket: return "StopMarket"
+        elif order_type is OrderType.StopLimit: return "StopLimit"
+        elif order_type is OrderType.MarketOnOpen: return "MarketOnOpen"
+        elif order_type is OrderType.MarketOnClose: return "MarketOnClose"
+        elif order_type is OrderType.OptionExercise: return "OptionExercise"
+
 class OrderStatus(object):
     New = 0,
     Submitted = 1
@@ -31,19 +46,21 @@ class OrderStatus(object):
     Invalid = 7
     CancelPending = 8
 
+# lean/Common/Orders/OrderTicket.cs
 class OrderTicket(object):
     __last_order_id = 0
 
     def __init__(self, symbol, quantity, price=None, order_type=OrderType.Market,
                  status=OrderStatus.New):
+        OrderTicket.__last_order_id += 1
         self.Symbol = symbol
         self.Quantity = quantity
         self.Type = order_type
         self.Status = status
         self.FillQuantity = 0
         self.FillPrice = 0
-        OrderTicket.__last_order_id += 1
         self.OrderId = OrderTicket.__last_order_id
+        self.OrderFee = 0
         if price:
             self.FillPrice = price
         if status == OrderStatus.Filled:
@@ -51,34 +68,39 @@ class OrderTicket(object):
         if status == OrderStatus.PartiallyFilled:
             self.FillQuantity = quantity / 2
 
-    def ToString(self):
-        print('TICKET [%s] x %f' %(self.Symbol, self.Quantity))
+    def __str__(self):
+        return "OrderId: %d Submitted %s order for %d units of %s" % \
+            (self.OrderId, OrderType.TypeToString(self.Type), self.Quantity, self.Symbol)
 
 
 class Transactions(dict):
-    def __init__(self):
-        super(Transactions, self).__init__()
-
     def GetOrderById(self, order_id):
         return self[order_id]
 
 
 class Symbol(object):
-    def __init__(self, ticker, **_kwargs):
+
+    @classmethod
+    def Create(cls, ticker, security_type, market):
+        return Symbol(ticker, security_type, market)
+
+    def __init__(self, ticker="", security_type=SecurityType.Equity, market=Market.USA):
         self.Value = ticker
-        self.SecurityType = SecurityType.Equity
+        self.SecurityType = security_type
+        self.Market = market
 
     def __hash__(self):
-        return hash((self.Value, self.SecurityType))
+        return hash((self.Value, self.SecurityType, self.Market))
 
     def __eq__(self, other):
-        return (self.Value, self.SecurityType) == (other.Value, other.SecurityType)
+        return (self.Value, self.SecurityType, self.Market) == (other.Value, other.SecurityType, other.Market)
 
     def __ne__(self, other):
         return not(self == other)
 
     def __str__(self):
         return self.Value
+
 
 class Security(object):
     def __init__(self, ticker, **kwargs):
@@ -89,9 +111,16 @@ class Securities(dict):
     def __init__(self, securities=[]):
         super(Securities, self).__init__()
         for sec in securities:
-            symb = sec[0]
+            symbol = sec[0]
+            ticker = symbol.Value
             price = Decimal(sec[1])
-            self[symb] = Security(symb, price=price)
+            self[ticker] = Security(symbol, price=price)
+
+
+class BrokerageName(object):
+    Default = 0
+    InteractiveBrokersBrokerage = 1
+
 
 # Dummy interface.
 class QCAlgorithm(object):
@@ -102,10 +131,11 @@ class QCAlgorithm(object):
         self.LiveMode = False
         self.Time = ''
         self.IsWarmingUp = False
-        self.WarmUp = 0
-        self.__default_order_status = default_order_status
+        self._default_order_status = default_order_status
         self._broker = None
         self._algorithms = []
+        self._warm_up_period = 0
+        self.SetBrokerageModel = BrokerageName.Default
         self.Initialize()
 
     def Initialize(self): pass
@@ -114,15 +144,19 @@ class QCAlgorithm(object):
     def SetEndDate(self, *args, **kwargs): pass
     def SetWarmUp(self, period): pass
     def OnOrderEvent(self, event_order): pass
-    def Log(self, args): print(args)
-    def Debug(self, args): self.Log(args)
+    def Log(self, message): print(message)
+    def Debug(self, message): print(message)
+    def Error(self, message): print(message)
+    def AddChart(self, plot): pass
+    def Plot(self, chart_name, series_name, value): pass
+
 
     def AddEquity(self, ticker, _resolution):
         return Security(ticker)
 
     # To be used in tests
     def SetDefaultOrderStatus(self, status):
-        self.__default_order_status = status
+        self._default_order_status = status
 
     def SetOrderStatus(self, status, order=None, quantity=None):
         if order is None:
@@ -136,32 +170,53 @@ class QCAlgorithm(object):
             ticket.FillQuantity = quantity
         else:
             ticket.FillQuantity = order.Quantity
-        ticket.FillPrice = self.Securities[ticket.Symbol].Price
+        ticket.FillPrice = self.Securities[ticket.Symbol.Value].Price
         self.OnOrderEvent(ticket)
 
 
-    def MarketOrder(self, symbol, quantity, _asynchronous, _tag):
-        ticket = OrderTicket(symbol, quantity, order_type=OrderType.Market,
-                             status=self.__default_order_status)
+    def _mockOrder(self, symbol, quantity, order_type):
+        ticket = OrderTicket(symbol, quantity, order_type=order_type, status=self._default_order_status)
         self.Transactions[ticket.OrderId] = ticket
         return ticket
+
+    def MarketOrder(self, symbol, quantity, _asynchronous, _tag):
+        return self._mockOrder(symbol, quantity, OrderType.Market)
 
     def LimitOrder(self, symbol, quantity, _limit_price, _tag):
-        ticket = OrderTicket(symbol, quantity, order_type=OrderType.Limit,
-                             status=self.__default_order_status)
-        self.Transactions[ticket.OrderId] = ticket
-        return ticket
+        return self._mockOrder(symbol, quantity, OrderType.Limit)
 
     def StopMarketOrder(self, symbol, quantity, _stop_price, _tag):
-        ticket = OrderTicket(symbol, quantity, order_type=OrderType.StopMarket,
-                             status=self.__default_order_status)
-        self.Transactions[ticket.OrderId] = ticket
-        return ticket
+        return self._mockOrder(symbol, quantity, OrderType.StopMarket)
 
     def StopLimitOrder(self, symbol, quantity, _stop_price, _limit_price, _tag):
-        ticket = OrderTicket(symbol, quantity, order_type=OrderType.StopLimit,
-                             status=self.__default_order_status)
-        self.Transactions[ticket.OrderId] = ticket
-        return ticket
+        return self._mockOrder(symbol, quantity, OrderType.StopLimit)
 
-    def SetWarmUp(self, period): pass
+    def MarketOnOpenOrder(self, symbol, quantity, _tag):
+        return self._mockOrder(symbol, quantity, OrderType.MarketOnOpen)
+
+    def MarketOnCloseOrder(self, symbol, quantity, _tag):
+        return self._mockOrder(symbol, quantity, OrderType.MarketOnClose)
+
+    def OptionExerciseOrder(self, symbol, quantity, _tag):
+        return self._mockOrder(symbol, quantity, OrderType.OptionExercise)
+
+    def SetHoldings(self, symbol, percentage, liquidateExistingHoldings=False, tag=""):
+        pass
+
+    def Liquidate(self, symbol=None, tag=""):
+        pass
+
+
+class SeriesType(object):
+    Line = 1
+    Scatter = 2
+    Candle = 3
+    Bar = 4
+    Flag = 5
+
+class Series(object):
+    def __init__(self, chart, series, seriesType, unit): pass
+
+class Chart(object):
+    def __init__(self, name): pass
+    def AddSeries(self, series): pass

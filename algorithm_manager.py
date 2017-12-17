@@ -1,32 +1,50 @@
 """
-MD5: 56ecb03f9f7f14c20d612193b2d2c4f2
+MD5: f8a163d11feff380aef25ccfbaa6be97
 """
 
 # pylint: disable=C0321,C0111,W0201,C0413
 try: QCAlgorithm
-except NameError: from mocked import QCAlgorithm, OrderStatus
+except NameError: from mocked import QCAlgorithm, OrderStatus, Chart, SeriesType, Series
+
+# def accepts(*types):
+#     def check_accepts(f):
+#         assert len(types) == f.func_code.co_argcount
+#         def new_f(*args, **kwds):
+#             for (a, t) in zip(args, types):
+#                 assert isinstance(a, t), \
+#                        "arg %r does not match %s" % (a,t)
+#             return f(*args, **kwds)
+#         new_f.func_name = f.func_name
+#         return new_f
+#     return check_accepts
 
 class AlgorithmManager(QCAlgorithm):
 
     def registerBroker(self, broker):
         self._broker = broker
 
-    def registerAlgorithms(self, algorithms):
-        self.Debug("registerAlgorithms")
+    # @accepts(None, (list, list))
+    def registerAlgorithms(self, algorithms, benchmarks):
+        self._warm_up_period = 0
         self._algorithms = algorithms
+        self._benchmarks = benchmarks
 
-    def __pre(self):
+        plot = Chart('Performance')
+        for i in algorithms + benchmarks:
+            plot.AddSeries(Series(i.Name, SeriesType.Line, 0, '%'))
+        self.AddChart(plot)
+
+    def _pre(self):
         pass
 
-    def __post(self):
-        self._broker.executeOrders()
+    def _post(self):
+        # self._broker.executeOrders()
+        pass
 
     def SetWarmUp(self, period):
-        if hasattr(self, 'WarmUp'):
-            self.WarmUp = max(self.WarmUp, period)
-        else:
-            self.WarmUp = period
-        super(AlgorithmManager, self).SetWarmUp(period)
+        if period > self._warm_up_period:
+            self._warm_up_period = period
+            super(AlgorithmManager, self).SetWarmUp(period)
 
     def CoarseSelectionFunction(self, coarse):
         symbols = []
@@ -41,58 +59,74 @@ class AlgorithmManager(QCAlgorithm):
         return symbols
 
     def OnData(self, data):
-        self.Debug("OnData")
-        self.__pre()
+        if self.IsWarmingUp: return
+        # self.Log("OnData")
+        self._pre()
         for alg in self._algorithms:
             alg.OnData(data)
-        self.__post()
+        self._post()
 
     def OnDividend(self):
-        self.Debug("OnDividend")
-        self.__pre()
+        if self.IsWarmingUp: return
+        self.Log("OnDividend")
+        self._pre()
         for alg in self._algorithms:
             alg.OnDividend()
-        self.__post()
-
-    def OnEndOfDay(self):
-        # self.Debug("OnEndOfDay")
-        self.__pre()
-        for alg in self._algorithms:
-            alg.OnEndOfDay()
-            # self.Debug(str(alg))
-        self.__post()
-
-    def OnEndOfAlgorithm(self):
-        self.Debug("OnEndOfAlgorithm")
-        self.__pre()
-        for alg in self._algorithms:
-            alg.OnEndOfAlgorithm()
-        self.__post()
+        self._post()
 
     def OnSecuritiesChanged(self, changes):
-        self.Debug("OnSecuritiesChanged")
-        self.__pre()
+        if self.IsWarmingUp: return
+        self.Log("OnSecuritiesChanged {0}".format(changes))
+        self._pre()
         for alg in self._algorithms:
             # Only call if there's a relevant stock in alg
             alg.OnSecuritiesChanged(changes)
-        self.__post()
+        self._post()
+
+    def OnEndOfDay(self):
+        if self.IsWarmingUp: return
+        # self.Log("OnEndOfDay")
+        self._pre()
+        for alg in self._algorithms:
+            alg.OnEndOfDay()
+        self._post()
+
+        for i in self._algorithms + self._benchmarks:
+            self.Plot('Performance', i.Name, i.Performance)
+
+    def OnEndOfAlgorithm(self):
+        self.Log("OnEndOfAlgorithm")
+        self._pre()
+        for alg in self._algorithms:
+            alg.OnEndOfAlgorithm()
+        self._post()
 
     def OnOrderEvent(self, event_order):
-        self.Debug("OnOrderEvent")
-        ticket = self.Transactions.GetOrderById(event_order.OrderId)
+        self.Log("OnOrderEvent")
+        order_id = event_order.OrderId
+        ticket = self.Transactions.GetOrderById(order_id)
+        self.Log("TICKET: {0}".format(ticket))
 
-        if event_order.Status == OrderStatus.Submitted:
-            self.Debug("SUBMITTED: {0}".format(ticket))
-
-        elif event_order.Status in [OrderStatus.Filled, OrderStatus.PartiallyFilled]:
-            order = self._broker.submitted.pop(event_order.OrderId)
-            if event_order.Status == OrderStatus.PartiallyFilled:
-                self.Debug("PARTIAL FILL: {0}".format(ticket))
-            else:
-                self.Debug("FILLED: {0} at FILL PRICE: {1}".format(ticket, event_order.FillPrice))
-            order.Portfolio.fillOrder(order.Symbol, float(event_order.FillQuantity),
-                                      float(event_order.FillPrice))
+        if event_order.Status in [OrderStatus.Submitted, OrderStatus.New]:
+            self.Log("SUBMITTED/NEW: {0}".format(ticket))
 
         else:
-            order = self._broker.submitted.pop(event_order.OrderId)
-            self.Debug(event_order.ToString())
+            if order_id in self._broker.submitted:
+                order = self._broker.submitted.pop(order_id)
+                self.Log("ORDER: {0}".format(order))
+            else:
+                order = None
+                self.Log("ORDER: N/A")
+
+            if event_order.Status == OrderStatus.Invalid:
+                self.Log("INVALID: {0}".format(ticket))
+
+            elif event_order.Status in [OrderStatus.Filled, OrderStatus.PartiallyFilled]:
+                prefix = "PARTIALLY " if event_order.Status == OrderStatus.PartiallyFilled else ""
+                self.Log("{0}FILLED: {1} at FILL PRICE: {2}".format(prefix, ticket, event_order.FillPrice))
+                if order:
+                    order.Portfolio.FillOrder(order.Symbol, float(event_order.FillQuantity),
+                                              float(event_order.FillPrice), float(event_order.OrderFee))
+
+            else:
+                self.Log("????: {0} at FILL PRICE: {1}".format(ticket, event_order.FillPrice))

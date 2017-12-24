@@ -2,8 +2,34 @@
 MD5: a31e1f00c11da8ef0010e57d00540e41
 """
 from decimal import Decimal
+from types import NoneType  # pylint: disable=W0611
 
-# pylint: disable=C0103,C0325,C0321,R0903,R0201,W0102,R0902,R0913,R0904
+
+# pylint: disable=C0103,C0325,C0321,R0903,R0201,W0102,R0902,R0913,R0904,R0911
+def accepts(**types):
+    def check_accepts(f):
+        assert len(types) == f.func_code.co_argcount, \
+            'wrong number of arguments in "%s"' % f.func_name
+
+        def new_f(*args, **kwds):
+            for i, v in enumerate(args):
+                if types.has_key(f.func_code.co_varnames[i]) and \
+                        not isinstance(v, types[f.func_code.co_varnames[i]]):
+                    raise Exception("arg '%s'=%r does not match %s" %
+                                    (f.func_code.co_varnames[i], v, types[f.func_code.co_varnames[i]]))
+                    # del types[f.func_code.co_varnames[i]]
+
+            for k, v in kwds.iteritems():
+                if types.has_key(k) and not isinstance(v, types[k]):
+                    raise Exception("arg '%s'=%r does not match %s" %
+                                    (k, v, types[k]))
+
+            return f(*args, **kwds)
+        new_f.func_name = f.func_name
+        return new_f
+    return check_accepts
+
+
 class Market(object):
     USA = 1
 

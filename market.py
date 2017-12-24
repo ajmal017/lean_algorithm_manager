@@ -6,7 +6,7 @@ MD5: 15d847147ab511e5249e614d15c19149
 try: QCAlgorithm
 except NameError: from mocked import OrderType, Resolution
 
-# pylint: disable=C0111,C0103,C0112,E1136,R0903,R0913,R0914,R0902
+# pylint: disable=C0111,C0103,C0112,E1136,R0903,R0913,R0914,R0902,R0911
 class Position(object):
     def __init__(self, symbol, quantity, price_per_share):
         self.Symbol = symbol

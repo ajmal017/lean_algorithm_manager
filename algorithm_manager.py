@@ -4,26 +4,17 @@ MD5: f8a163d11feff380aef25ccfbaa6be97
 
 # pylint: disable=C0321,C0111,W0201,C0413
 try: QCAlgorithm
-except NameError: from mocked import QCAlgorithm, OrderStatus, Chart, SeriesType, Series
-
-# def accepts(*types):
-#     def check_accepts(f):
-#         assert len(types) == f.func_code.co_argcount
-#         def new_f(*args, **kwds):
-#             for (a, t) in zip(args, types):
-#                 assert isinstance(a, t), \
-#                        "arg %r does not match %s" % (a,t)
-#             return f(*args, **kwds)
-#         new_f.func_name = f.func_name
-#         return new_f
-#     return check_accepts
+except NameError:
+    from mocked import *  # pylint: disable=W0614,W0401
+    from market import Broker
 
 class AlgorithmManager(QCAlgorithm):
 
+    @accepts(self=object, broker=Broker)
     def registerBroker(self, broker):
         self._broker = broker
 
-    # @accepts(None, (list, list))
+    @accepts(self=object, algorithms=list, benchmarks=list)
     def registerAlgorithms(self, algorithms, benchmarks):
         self._warm_up_period = 0
         self._algorithms = algorithms

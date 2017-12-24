@@ -15,10 +15,10 @@ class MyAlgos(AlgorithmManager):
 
         self.SetBrokerageModel(BrokerageName.InteractiveBrokersBrokerage, AccountType.Cash)
 
-        self.registerBroker(Broker(self))
+        broker = Broker()
         self.registerAlgorithms(
-            [Algorithm1(self, broker=self._broker, cash=10000, name="Algorithm1"),
-             Algorithm2(self, broker=self._broker, cash=20000, name="Algorithm2"),
-             Algorithm3(self, broker=self._broker, cash=30000, name="Algorithm3")],
-            [BenchmarkSymbol(parent=self, ticker='SPY'),
-             BenchmarkSymbol(parent=self, ticker='VGT')])
+            [Algorithm1(broker=broker, cash=10000, name="Algorithm1"),
+             Algorithm2(broker=broker, cash=20000, name="Algorithm2"),
+             Algorithm3(broker=broker, cash=30000, name="Algorithm3")],
+            [BenchmarkSymbol(ticker='SPY'),
+             BenchmarkSymbol(ticker='VGT')])

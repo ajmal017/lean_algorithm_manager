@@ -1,34 +1,12 @@
 """
-MD5: a31e1f00c11da8ef0010e57d00540e41
+MD5: 6938794c62e1077b530c2f263b08e8e6
 """
+
 from decimal import Decimal
-from types import NoneType  # pylint: disable=W0611
+from decorators import accepts
 
 
 # pylint: disable=C0103,C0325,C0321,R0903,R0201,W0102,R0902,R0913,R0904,R0911
-def accepts(**types):
-    def check_accepts(f):
-        assert len(types) == f.func_code.co_argcount, \
-            'wrong number of arguments in "%s"' % f.func_name
-
-        def new_f(*args, **kwds):
-            for i, v in enumerate(args):
-                if types.has_key(f.func_code.co_varnames[i]) and \
-                        not isinstance(v, types[f.func_code.co_varnames[i]]):
-                    raise Exception("arg '%s'=%r does not match %s" %
-                                    (f.func_code.co_varnames[i], v, types[f.func_code.co_varnames[i]]))
-                    # del types[f.func_code.co_varnames[i]]
-
-            for k, v in kwds.iteritems():
-                if types.has_key(k) and not isinstance(v, types[k]):
-                    raise Exception("arg '%s'=%r does not match %s" %
-                                    (k, v, types[k]))
-
-            return f(*args, **kwds)
-        new_f.func_name = f.func_name
-        return new_f
-    return check_accepts
-
 
 class Market(object):
     USA = 1
@@ -41,6 +19,89 @@ class Resolution(object):
     Minute = 2
     Second = 3
 
+class Symbol(object):
+
+    @classmethod
+    def Create(cls, ticker, security_type, market):
+        return Symbol(ticker, security_type, market)
+
+    def __init__(self, ticker, security_type=SecurityType.Equity, market=Market.USA):
+        self.Value = ticker
+        self.SecurityType = security_type
+        self.Market = market
+
+    def __hash__(self):
+        return hash((self.Value, self.SecurityType, self.Market))
+
+    def __eq__(self, other):
+        return (self.Value, self.SecurityType, self.Market) == (other.Value, other.SecurityType, other.Market)
+
+    def __ne__(self, other):
+        return not(self == other)
+
+    def __str__(self):
+        return self.Value
+
+
+class SymbolProperties(object):
+    @property
+    def LotSize(self):
+        return Decimal(1)
+
+class Security(object):
+    @accepts(self=object, ticker=(str, Symbol), price=(float, int))
+    def __init__(self, ticker, price):
+        self.Symbol = ticker if isinstance(ticker, Symbol) else Symbol(ticker)
+        self.Price = Decimal(price)
+        self.Leverage = 1.0
+        self.High = self.Price
+        self.Low = self.Price
+        self.Close = self.Price
+        self.Open = self.Price
+        self.Volume = 0.0
+        self.SymbolProperties = SymbolProperties()
+
+
+class InternalSecurityManager(dict):
+    def __init__(self, securities=[]):
+        super(InternalSecurityManager, self).__init__()
+        for ticker, price in securities:
+            self[ticker] = Security(ticker, price)
+
+    @accepts(self=object, key=(Symbol, str), value=Security)
+    def __setitem__(self, key, value):
+        if isinstance(key, str):
+            key = self.createKey(key)
+        return super(InternalSecurityManager, self).__setitem__(key, value)
+
+    @accepts(self=object, key=(Symbol, str))
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            key = self.createKey(key)
+        if key not in self:
+            return self.NoValue(key)
+        return super(InternalSecurityManager, self).__getitem__(key)
+
+    def createKey(self, key):
+        return Symbol.Create(key, SecurityType.Equity, Market.USA)
+
+    def NoValue(self, key):
+        raise KeyError, "Could not find key \"{}\"".format(key)
+
+
+class BrokerageName(object):
+    Default = 0
+    InteractiveBrokersBrokerage = 1
+
+
+class OrderDuration(object):
+    GTC = 0
+    Day = 1
+
+class OrderDirection(object):
+    Buy = 1
+    Hold = 0
+    Sell = -1
 
 # lean/Common/Orders/OrderTypes.cs
 class OrderType(object):
@@ -72,21 +133,95 @@ class OrderStatus(object):
     Invalid = 7
     CancelPending = 8
 
-# lean/Common/Orders/OrderTicket.cs
-class OrderTicket(object):
-    __last_order_id = 0
-
-    def __init__(self, symbol, quantity, price=None, order_type=OrderType.Market,
-                 status=OrderStatus.New):
-        OrderTicket.__last_order_id += 1
+class Order(object):
+    def __init__(self, order_id, symbol, quantity, order_type=OrderType.Market,
+                 status=OrderStatus.New, tag=""):
+        self.Id = order_id
         self.Symbol = symbol
+        self.Price = 0
         self.Quantity = quantity
         self.Type = order_type
         self.Status = status
-        self.FillQuantity = 0
-        self.FillPrice = 0
-        self.OrderId = OrderTicket.__last_order_id
+        self.Duration = OrderDuration.GTC
+        self.Tag = tag
+        self.AverageFillPrice = None
+        self.QuantityFilled = None
+        self.AbsoluteQuantity = 0
+        self.Value = 0
+
+    def ToString(self):
+        return "OrderId: {0} {1} {2} order for {3} units of {5}" \
+            .format(self.Id, self.Status, OrderType.TypeToString(self.Type), self.Quantity, self.Symbol)
+
+    def __str__(self):
+        return self.ToString()
+
+    def __repr__(self):
+        return self.__str__()
+
+# lean/Common/Orders/OrderTicket.cs
+class OrderTicket(object):
+    @accepts(self=object, order_id=int, symbol=Symbol,
+             quantity=(int, float), order_type=int, status=int, tag=str)
+    def __init__(self, order_id, symbol, quantity, order_type=OrderType.Market,
+                 status=OrderStatus.New, tag=""):
+        self.Order = Order(order_id, symbol, quantity, order_type, status, tag)
+        self.SecurityType = symbol.SecurityType
+        self.OrderEvents = []
+
+    @property
+    def OrderId(self):
+        return self.Order.Id
+
+    @property
+    def Status(self):
+        return self.Order.Status
+
+    @Status.setter
+    def Status(self, value):
+        self.Order.Status = value
+
+    @property
+    def Symbol(self):
+        return self.Order.Symbol
+
+    @property
+    def Quantity(self):
+        return self.Order.Quantity
+
+    @property
+    def OrderType(self):
+        return self.Order.Type
+
+    @property
+    def AverageFillPrice(self):
+        return sum([event.FillPrice for event in self.OrderEvents]) / float(self.QuantityFilled)
+
+    @property
+    def QuantityFilled(self):
+        return sum([event.FillQuantity for event in self.OrderEvents])
+
+    def ToString(self):
+        return "Ticket(%s, %.1f, %s)" % (self.Symbol, self.Quantity, self.OrderType)
+
+    def __str__(self):
+        return self.ToString()
+
+    def __repr__(self):
+        return self.__str__()
+
+    def Cancel(self, tag=""):
+        pass
+
+class OrderEvent(object):
+    def __init__(self, order_id, symbol, quantity, price=None, status=OrderStatus.New):
+        self.OrderId = order_id
+        self.Symbol = symbol
+        self.Quantity = quantity
+        self.Status = status
         self.OrderFee = 0
+        self.FillPrice = 0
+        self.FillQuantity = 0
         if price:
             self.FillPrice = price
         if status == OrderStatus.Filled:
@@ -95,73 +230,60 @@ class OrderTicket(object):
             self.FillQuantity = quantity / 2
 
     def __str__(self):
-        return "OrderId: %d Submitted %s order for %d units of %s" % \
-            (self.OrderId, OrderType.TypeToString(self.Type), self.Quantity, self.Symbol)
+        return "OrderId: %d Submitted order for %d units of %s" % \
+            (self.OrderId, self.Quantity, self.Symbol)
 
 
-class Transactions(dict):
+class SecurityTransactionManager(dict):
+    __last_order_id = 0
+
     def GetOrderById(self, order_id):
+        # rTODO: should return the Order
+        return self.GetOrderTicket(order_id)
+
+    def GetOrderTicket(self, order_id):
         return self[order_id]
 
+    # @accepts(self=object, order=InternalOrder)
+    def AddOrder(self, symbol, quantity, order_type=OrderType.Market, status=OrderStatus.New):
+        return OrderTicket(self.GetIncrementOrderId, symbol, quantity, order_type=order_type, status=status)
 
-class Symbol(object):
+    @property
+    def GetIncrementOrderId(self):
+        SecurityTransactionManager.__last_order_id += 1
+        return SecurityTransactionManager.__last_order_id
 
-    @classmethod
-    def Create(cls, ticker, security_type, market):
-        return Symbol(ticker, security_type, market)
+    def CancelOrder(self, order_id, tag=""):
+        return self.RemoveOrder(order_id, tag)
 
-    def __init__(self, ticker="", security_type=SecurityType.Equity, market=Market.USA):
-        self.Value = ticker
-        self.SecurityType = security_type
-        self.Market = market
+    def RemoveOrder(self, order_id, tag=""):
+        pass
 
-    def __hash__(self):
-        return hash((self.Value, self.SecurityType, self.Market))
+    def CancelOpenOrders(self, symbol):
+        # return List<OrderTicket>
+        pass
 
-    def __eq__(self, other):
-        return (self.Value, self.SecurityType, self.Market) == (other.Value, other.SecurityType, other.Market)
+    def GetOpenOrders(self):
+        # return List<Order>
+        pass
 
-    def __ne__(self, other):
-        return not(self == other)
-
-    def __str__(self):
-        return self.Value
-
-
-class Security(object):
-    def __init__(self, ticker, **kwargs):
-        self.Symbol = Symbol(ticker)
-        self.Price = Decimal(kwargs['price'] if 'price' in kwargs else 0.0)
-
-class Securities(dict):
-    def __init__(self, securities=[]):
-        super(Securities, self).__init__()
-        for sec in securities:
-            symbol = sec[0]
-            ticker = symbol.Value
-            price = Decimal(sec[1])
-            self[ticker] = Security(symbol, price=price)
-
-
-class BrokerageName(object):
-    Default = 0
-    InteractiveBrokersBrokerage = 1
+    def GetSufficientCapitalForOrder(self, _SecurityPortfolioManager, _Order):
+        return True
 
 
 # Dummy interface.
 class QCAlgorithm(object):
     def __init__(self, default_order_status=OrderStatus.Submitted):
-        self.Securities = Securities()
+        self.Securities = InternalSecurityManager()
         self.Portfolio = None
-        self.Transactions = Transactions()
+        self.Transactions = SecurityTransactionManager()
         self.LiveMode = False
-        self.Time = ''
         self.IsWarmingUp = False
         self._default_order_status = default_order_status
-        self._broker = None
         self._algorithms = []
         self._warm_up_period = 0
         self.SetBrokerageModel = BrokerageName.Default
+        self.Time = ""
         self.Initialize()
 
     def Initialize(self): pass
@@ -169,7 +291,7 @@ class QCAlgorithm(object):
     def SetStartDate(self, *args, **kwargs): pass
     def SetEndDate(self, *args, **kwargs): pass
     def SetWarmUp(self, period): pass
-    def OnOrderEvent(self, event_order): pass
+    def OnOrderEvent(self, order_event): pass
     def Log(self, message): print(message)
     def Debug(self, message): print(message)
     def Error(self, message): print(message)
@@ -178,30 +300,11 @@ class QCAlgorithm(object):
 
 
     def AddEquity(self, ticker, _resolution):
-        return Security(ticker)
-
-    # To be used in tests
-    def SetDefaultOrderStatus(self, status):
-        self._default_order_status = status
-
-    def SetOrderStatus(self, status, order=None, quantity=None):
-        if order is None:
-            for o in self._broker.submitted.values():
-                self.SetOrderStatus(status, order=o)
-            return
-
-        ticket = self.Transactions[order.Ticket.OrderId]
-        ticket.Status = status
-        if quantity:
-            ticket.FillQuantity = quantity
-        else:
-            ticket.FillQuantity = order.Quantity
-        ticket.FillPrice = self.Securities[ticket.Symbol.Value].Price
-        self.OnOrderEvent(ticket)
-
+        return self.Securities[ticker]
 
     def _mockOrder(self, symbol, quantity, order_type):
-        ticket = OrderTicket(symbol, quantity, order_type=order_type, status=self._default_order_status)
+        ticket = self.Transactions.AddOrder(symbol, quantity, order_type=order_type,
+                                            status=self._default_order_status)
         self.Transactions[ticket.OrderId] = ticket
         return ticket
 
@@ -246,3 +349,4 @@ class Series(object):
 class Chart(object):
     def __init__(self, name): pass
     def AddSeries(self, series): pass
+

@@ -25,7 +25,7 @@ class SimpleAlgorithm(object):
             # self._parent.Log("Delegating to parent \"{}\"".format(attr))
             return getattr(self._parent, attr)
         else:
-            raise AttributeError, attr
+            raise AttributeError(attr)
 
     def post(self):
         pass
@@ -169,7 +169,7 @@ class Algorithm(SimpleAlgorithm):
     def SetHoldings(self, symbol, percentage, liquidateExistingHoldings=False, tag=""):
         self.Log("SetHoldings(%s, %f)" % (symbol, percentage))
         if liquidateExistingHoldings:
-            to_liquidate = [s for s, p in self.Portfolio.iteritems() if s != symbol and p.Quantity > 0]
+            to_liquidate = [s for s, p in iter(self.Portfolio.items()) if s != symbol and p.Quantity > 0]
             for s in to_liquidate:
                 self.Portfolio.Liquidate(symbol=s, tag=self._tag(tag))
 

@@ -6,7 +6,6 @@ MD5: f4f24493fd64a097fcbfb96d8e079243
 try: QCAlgorithm
 except NameError: from mocked import *
 
-from types import NoneType
 from decimal import Decimal
 from decorators import accepts
 
@@ -55,10 +54,10 @@ class ISymbolDict(dict):
                 return key
             # return Symbol.Create(key, SecurityType.Equity, Market.USA)
         else:
-            raise TypeError, "Expected str or Symbol, but got {}".format(key)
+            raise TypeError("Expected str or Symbol, but got {}".format(key))
 
     def NoValue(self, key):
-        raise KeyError, "Could not find key \"{}\"".format(key)
+        raise KeyError("Could not find key \"{}\"".format(key))
 
 
 class InternalSecurity(object):
@@ -73,11 +72,11 @@ class InternalSecurity(object):
         if hasattr(self._parent, attr):
             return getattr(self._parent, attr)
         else:
-            raise AttributeError, attr
+            raise AttributeError(attr)
 
     def SetHoldings(self, position):
         self.Holdings = position
-        raise NotImplementedError, "Did not implement SetHoldings"
+        raise NotImplementedError("Did not implement SetHoldings")
 
     @property
     def HoldStock(self):
@@ -158,6 +157,7 @@ class Position(object):
         self.AveragePrice = new_sum / denominator
         self.Quantity += quantity
 
+
 class Portfolio(ISymbolDict):
     '''SecurityPortfolioManager'''
     def __init__(self, broker, cash=0.0, name=""):
@@ -183,7 +183,7 @@ class Portfolio(ISymbolDict):
 
     @property
     def Transactions(self):
-        raise NotImplementedError, "Did not implement Transactions"
+        raise NotImplementedError("Did not implement Transactions")
         # return Singleton.QCAlgorithm.Transactions
 
     @property
@@ -201,11 +201,11 @@ class Portfolio(ISymbolDict):
     @property
     def TotalHoldingsValue(self):
         return sum([pos.Quantity * float(Singleton.QCAlgorithm.Securities[symb].Price)
-                    for symb, pos in self.iteritems()])
+                    for symb, pos in iter(self.items())])
 
     @property
     def TotalHoldingsCost(self):
-        return sum([pos.Quantity * pos.AveragePrice for _symb, pos in self.iteritems()])
+        return sum([pos.Quantity * pos.AveragePrice for _symb, pos in iter(self.items())])
 
     @property
     def UnrealizedProfit(self):
@@ -262,7 +262,7 @@ class Portfolio(ISymbolDict):
         if remaining_quantity < 0:
             message = "InternalOrder removed too many positions of %s" % symbol
             self.Log("EXCEPTION: %s" % message)
-            raise Exception, message
+            raise Exception(message)
         elif remaining_quantity == 0:
             self.pop(symbol)
 
@@ -276,10 +276,10 @@ class Portfolio(ISymbolDict):
         self.Log("Added Order")
 
 
-    @accepts(self=object, symbol=(Symbol, NoneType), tag=str)
+    @accepts(self=object, symbol=(Symbol, None), tag=str)
     def Liquidate(self, symbol=None, tag=""):
         if not symbol:
-            symbols = [sym for sym, pos in self.iteritems() if pos.Quantity > 0]
+            symbols = [sym for sym, pos in iter(self.items()) if pos.Quantity > 0]
             for s in symbols:
                 self.Debug("self.Liquidate({})".format(s))
                 self.Liquidate(symbol=s, tag=tag)
@@ -400,7 +400,7 @@ class BenchmarkSymbol(object):
 
 class InternalOrder(object):
     @accepts(self=object, portfolio=Portfolio, symbol=Symbol, quantity=(int, float), order_type=int,
-             limit_price=(float, NoneType), stop_price=(float, NoneType), tag=str)
+             limit_price=(float, None), stop_price=(float, None), tag=str)
     def __init__(self, portfolio, symbol, quantity, order_type=OrderType.Market,
                  limit_price=None, stop_price=None, tag=""):
         self.Portfolio = portfolio
@@ -489,7 +489,7 @@ class Broker(object):
             message = "Insufficient funds in real portfolio ($%.2f) \
                       to support running algorithms ($%.2f)." % (real_funds, virtual_funds)
             self.Log("EXCEPTION: %s" % message)
-            raise Exception, message
+            raise Exception(message)
 
     @accepts(self=object, order=InternalOrder)
     def AddOrder(self, order):

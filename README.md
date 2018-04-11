@@ -3,13 +3,16 @@
 
 1. Install Pyenv: https://github.com/pyenv/pyenv
 
-2. Install python 2.7.14
+2. Install python 3.6.3
+
+Using `pyenv` (recommended):
 ```
-pyenv install -v 2.7.14
+pyenv install -v 3.6.3
 ```
+
 Or on MacOS with homebrew:
 ```
-PYTHON_CONFIGURE_OPTS="--enable-framework" CFLAGS="-I$(brew --prefix openssl)/include" LDFLAGS="-L$(brew --prefix openssl)/lib" pyenv install -v 2.7.14
+PYTHON_CONFIGURE_OPTS="--enable-framework" CFLAGS="-I$(brew --prefix openssl)/include" LDFLAGS="-L$(brew --prefix openssl)/lib" pyenv install -v 3.6.3
 ```
 
 3. Install requirements

@@ -17,7 +17,7 @@ def order_qty(orders, symbol):
 
 def MockOrderStatus(broker, status, order=None, quantity=None):
     if order is None:
-        for o in broker.submitted.values():
+        for o in list(broker.submitted.values()):
             MockOrderStatus(broker, status, order=o)
         return
 
@@ -214,7 +214,7 @@ class TestMarketOrders(unittest.TestCase):
 
     def assert_portfolio(self, portfolio, cash, args):
         self.assertEqual(portfolio.CashBook, cash)
-        for symb, qty in args.iteritems():
+        for symb, qty in iter(args.items()):
             if qty == 0:
                 self.assertTrue(symb not in portfolio)
             else:
@@ -222,9 +222,8 @@ class TestMarketOrders(unittest.TestCase):
 
     def assert_orders(self, transactions, args):
         self.assertEqual(len(transactions), len(args))
-        orders = [(x.Symbol, x.Quantity, x.OrderType)
-                  for x in transactions.values()]
-        for symb, qty in args.iteritems():
+        orders = [(x.Symbol, x.Quantity, x.OrderType) for x in transactions.values()]
+        for symb, qty in iter(args.items()):
             if qty == 0:
                 self.assertTrue(symb not in transactions)
             else:

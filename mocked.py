@@ -97,7 +97,7 @@ class InternalSecurityManager(dict):
         return Symbol.Create(key, SecurityType.Equity, Market.USA)
 
     def NoValue(self, key):
-        raise KeyError, "Could not find key \"{}\"".format(key)
+        raise KeyError("Could not find key \"{}\"".format(key))
 
 
 class BrokerageName(object):

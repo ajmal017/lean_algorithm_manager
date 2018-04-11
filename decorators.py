@@ -88,30 +88,30 @@ def delegates_to(cls):
                 print("Delegating to parent: {}".format(attr))
                 return getattr(self.wrapped._parent, attr)
             else:
-                raise AttributeError, attr
+                raise AttributeError(attr)
 
     return Wrapper
 
 def accepts(**types):
     def check_accepts(f):
-        assert len(types) == f.func_code.co_argcount, \
-            'wrong number of arguments in "%s"' % f.func_name
+        assert len(types) == f.__code__.co_argcount, \
+            'wrong number of arguments in "%s"' % f.__name__
 
         def wrapper(*args, **kwargs):
             for i, v in enumerate(args):
-                if types.has_key(f.func_code.co_varnames[i]) and \
-                        not isinstance(v, types[f.func_code.co_varnames[i]]):
+                if f.__code__.co_varnames[i] in types and \
+                        not isinstance(v, types[f.__code__.co_varnames[i]]):
                     raise Exception("arg '%s'=%r does not match %s" %
-                                    (f.func_code.co_varnames[i], v, types[f.func_code.co_varnames[i]]))
-                    # del types[f.func_code.co_varnames[i]]
+                                    (f.__code__.co_varnames[i], v, types[f.__code__.co_varnames[i]]))
+                    # del types[f.__code__.co_varnames[i]]
 
-            for k, v in kwargs.iteritems():
-                if types.has_key(k) and not isinstance(v, types[k]):
+            for k, v in iter(kwargs.items()):
+                if k in types and not isinstance(v, types[k]):
                     raise Exception("arg '%s'=%r does not match %s" %
                                     (k, v, types[k]))
 
             return f(*args, **kwargs)
-        wrapper.func_name = f.func_name
+        wrapper.__name__ = f.__name__
         return wrapper
     return check_accepts
 
@@ -121,13 +121,13 @@ def convert_to_symbol(arg_name, make_symbol_func):
         if hasattr(f, "wrapped_args"):
             wrapped_args = getattr(f, "wrapped_args")
         else:
-            code = f.func_code
+            code = f.__code__
             wrapped_args = list(code.co_varnames[:code.co_argcount])
 
         try:
             arg_index = wrapped_args.index(arg_name)
         except ValueError:
-            raise NameError, arg_name
+            raise NameError(arg_name)
 
         def wrapper(*args, **kwargs):
             if arg_index < len(args):

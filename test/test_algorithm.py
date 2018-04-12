@@ -84,12 +84,64 @@ class TestSimpleAlgorithm(unittest.TestCase):
         Singleton.Setup(self.qc)
         self.qc.Securities = InternalSecurityManager([(FOO, 5), (BAR, 50)])
         self.broker = Broker()
+        self.broker.Portfolio.CashBook = 200
         self.qc.Initialize()
-        self.algorithm = Algorithm1(broker=self.broker, cash=200, name="alg1")
+        self.algorithm = Algorithm1(broker=self.broker, cash=150, name="alg1")
+        self.algorithm.Portfolio[self.algorithm.stock] = Position(FOO, 10, 5)
 
-    def test_algorithms_cash(self):
+    def test_set_holdings_for_new_security(self):
+        self.algorithm.SetHoldings(BAR, 0.5)
+        self.assertEqual(len(self.broker._to_submit), 1)
+        self.assertEqual(self.broker._to_submit[0].Symbol, BAR)
+        self.assertEqual(self.broker._to_submit[0].Quantity, 2) # rounded from 2.5
+
+    def test_set_holdings_for_new_security_100(self):
+        self.algorithm.SetHoldings(BAR, 1.0)
+        self.assertEqual(len(self.broker._to_submit), 1)
+        self.assertEqual(self.broker._to_submit[0].Symbol, BAR)
+        self.assertEqual(self.broker._to_submit[0].Quantity, 4)
+
+    def test_set_holdings_for_new_security_100_with_liquidate(self):
+        self.algorithm.SetHoldings(BAR, 1.0, liquidateExistingHoldings=True)
+        self.assertEqual(len(self.broker._to_submit), 2)
+        self.assertEqual(self.broker._to_submit[0].Symbol, FOO)
+        self.assertEqual(self.broker._to_submit[0].Quantity, -10)
+        self.assertEqual(self.broker._to_submit[1].Symbol, BAR)
+        self.assertEqual(self.broker._to_submit[1].Quantity, 4)
+
+    def test_set_holdings_for_new_security_0(self):
+        self.algorithm.SetHoldings(BAR, 0.0)
+        self.assertEqual(len(self.broker._to_submit), 0)
+
+    def test_set_holdings_for_new_security_0_with_liquidate(self):
+        self.algorithm.SetHoldings(BAR, 0.0, liquidateExistingHoldings=True)
+        self.assertEqual(len(self.broker._to_submit), 1)
+        self.assertEqual(self.broker._to_submit[0].Symbol, FOO)
+        self.assertEqual(self.broker._to_submit[0].Quantity, -10)
+
+    def test_set_holdings_for_existing_security(self):
         self.algorithm.SetHoldings(FOO, 0.5)
-        self.algorithm.SetHoldings('foo', 0.5)
+        self.assertEqual(len(self.broker._to_submit), 1)
+        self.assertEqual(self.broker._to_submit[0].Symbol, FOO)
+        self.assertEqual(self.broker._to_submit[0].Quantity, 10)
+
+    def test_set_holdings_for_existing_security_triggers_sell(self):
+        self.algorithm.SetHoldings(FOO, 0.1) # total 4 positions
+        self.assertEqual(len(self.broker._to_submit), 1)
+        self.assertEqual(self.broker._to_submit[0].Symbol, FOO)
+        self.assertEqual(self.broker._to_submit[0].Quantity, -6)
+
+    def test_set_holdings_for_existing_security_100(self):
+        self.algorithm.SetHoldings(FOO, 1.0)
+        self.assertEqual(len(self.broker._to_submit), 1)
+        self.assertEqual(self.broker._to_submit[0].Symbol, FOO)
+        self.assertEqual(self.broker._to_submit[0].Quantity, 30)
+
+    def test_set_holdings_for_existing_security_100_with_liquidate(self):
+        self.algorithm.SetHoldings(FOO, 1.0, liquidateExistingHoldings=True)
+        self.assertEqual(len(self.broker._to_submit), 1)
+        self.assertEqual(self.broker._to_submit[0].Symbol, FOO)
+        self.assertEqual(self.broker._to_submit[0].Quantity, 30)
 
 
 

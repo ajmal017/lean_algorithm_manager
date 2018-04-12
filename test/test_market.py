@@ -115,23 +115,20 @@ class TestPortfolioWithSinglePosition(unittest.TestCase):
         self.assertEqual(self.Portfolio[FOO].AveragePrice, 2.5)
         self.assertEqual(self.Portfolio.CashBook, 273)
 
-    def test_target_allocation_equals_current_allocation(self):
+    def test_generate_orders(self):
         order = self.Portfolio.GenerateOrder(FOO, 0.1)
         self.assertEqual(order, InternalOrder(self.Portfolio, FOO, 0.0))
 
-    def test_target_allocation(self):
         order = self.Portfolio.GenerateOrder(FOO, 0.2)
         self.assertEqual(order, InternalOrder(self.Portfolio, FOO, 12.0))
 
-    def test_target_deallocation(self):
         order = self.Portfolio.GenerateOrder(FOO, 0.05)
         self.assertEqual(order, InternalOrder(self.Portfolio, FOO, -6.0))
 
-    def test_partial_target_allocation(self):
         order = self.Portfolio.GenerateOrder(FOO, 0.21)
         self.assertEqual(order, InternalOrder(self.Portfolio, FOO, math.floor(13.2)))
 
-    def test_target_allocation_for_nonexisting_position(self):
+    def test_generate_order_for_new_security(self):
         order = self.Portfolio.GenerateOrder(BAR, 0.6)
         self.assertEqual(order, InternalOrder(self.Portfolio, BAR, 18.0))
 

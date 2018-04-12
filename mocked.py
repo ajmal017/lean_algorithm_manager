@@ -1,5 +1,5 @@
 """
-MD5: 6938794c62e1077b530c2f263b08e8e6
+MD5: acfb3f8e6f320742ca005a8868aeb86b
 """
 
 from decimal import Decimal
@@ -249,7 +249,7 @@ class SecurityTransactionManager(dict):
     __last_order_id = 0
 
     def GetOrderById(self, order_id):
-        # rTODO: should return the Order
+        # TODO: should return the Order
         return self.GetOrderTicket(order_id)
 
     def GetOrderTicket(self, order_id):
@@ -292,15 +292,20 @@ class QCAlgorithm(object):
         self.IsWarmingUp = False
         self._default_order_status = default_order_status
         self._algorithms = []
-        self._warm_up_period = 0
         self.SetBrokerageModel = BrokerageName.Default
         self.Time = ""
+        self._warm_up = None
+        self._warm_up_from_algorithm = False
+        self._start_date = None
+        self._start_date_from_parent = False
+        self._end_date = None
+        self._end_date_from_parent = False
         self.Initialize()
 
     def Initialize(self): pass
     def SetCash(self, *args, **kwargs): pass
-    def SetStartDate(self, *args, **kwargs): pass
-    def SetEndDate(self, *args, **kwargs): pass
+    def SetStartDate(self, year, month, day): pass
+    def SetEndDate(self, year, month, day): pass
     def SetWarmUp(self, period): pass
     def OnOrderEvent(self, order_event): pass
     def Log(self, message): print(message)

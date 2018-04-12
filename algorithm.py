@@ -1,12 +1,12 @@
 """
-MD5: 41dcbf44c8d01d513003d01eaa152ef9
+MD5: 0660672d58520f0f3e82c9b033594cd2
 """
 
 from datetime import timedelta
 
 # pylint: disable=C0321,C0103,W0613,R0201,R0913, R0904, C0111
 try: QCAlgorithm
-except NameError: from mocked import TradeBarConsolidator, OrderType, OrderStatus, Symbol, QCAlgorithm
+except NameError: from mocked import TradeBarConsolidator, OrderType, Symbol, QCAlgorithm
 
 from market import Portfolio, InternalOrder, InternalSecurity, Securities, Singleton
 from decorators import accepts, convert_to_symbol
@@ -34,6 +34,15 @@ class SimpleAlgorithm(object):
     def Performance(self):
         return 0.0
 
+    def SetWarmUp(self, period):
+        self._parent.SetWarmUpFromAlgorithm(period)
+
+    def SetStartDate(self, year, month, day):
+        self._parent.SetStartDateFromAlgorithm(year, month, day)
+
+    def SetEndDate(self, year, month, day):
+        self._parent.SetEndDateFromAlgorithm(year, month, day)
+
     ######################################################################
     def CoarseSelectionFunction(self, coarse): return []
     def FineSelectionFunction(self, fine): return []
@@ -44,8 +53,6 @@ class SimpleAlgorithm(object):
     def OnSecuritiesChanged(self, changes): pass
     def OnOrderEvent(self, order_event): pass
     def Initialize(self): pass
-    def SetStartDate(self, *args, **kwargs): pass
-    def SetEndDate(self, *args, **kwargs): pass
     def SetCash(self, cash): pass
     def Log(self, message): Singleton.QCAlgorithm.Log("[%s] %s" % (self.Name, message))
     def Debug(self, message): Singleton.QCAlgorithm.Log("[%s-DEBUG] %s" % (self.Name, message))
@@ -77,15 +84,13 @@ class Algorithm(SimpleAlgorithm):
     # Can't use this
     # @accepts(self=object, order_event=OrderEvent)
     def TryToFillOnOrderEvent(self, order_event):
-        if order_event.Status not in [OrderStatus.Submitted, OrderStatus.New]:
-            self.Log("OrderID: {}".format(order_event.OrderId))
-            self.Log("Submitted: {}".format(self.Portfolio.Broker.submitted))
-            order = self.Portfolio.Broker.submitted.pop(order_event.OrderId, None)
-            if order:
-                self.Log("ORDER: {0}".format(order))
-                order.Portfolio.ProcessOrderEvent(order_event, order)
-                return True
-
+        self.Log("OrderID: {}".format(order_event.OrderId))
+        self.Log("Submitted: {}".format(self.Portfolio.Broker.submitted))
+        order = self.Portfolio.Broker.submitted.pop(order_event.OrderId, None)
+        if order:
+            self.Log("ORDER: {0}".format(order))
+            order.Portfolio.ProcessOrderEvent(order_event, order)
+            return True
         return False
 
     def CreateRollingWindow(self, symbol, window_size):

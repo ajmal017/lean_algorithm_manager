@@ -1,6 +1,7 @@
 # pylint: disable=C0111,C0103,C0112,W0201,W0212
 import unittest
 
+from datetime import date
 from mocked import Resolution, Symbol, InternalSecurityManager
 from algorithm import Algorithm, SimpleAlgorithm
 from market import Singleton, Broker, Position
@@ -72,11 +73,44 @@ class TestMultipleAlgorithms(unittest.TestCase):
         self.assertEqual(self.algorithm1.Portfolio.TotalPortfolioValue, 200 + (10 * 5))
         self.assertEqual(self.algorithm2.Portfolio.TotalPortfolioValue, 200 + (3 * 50))
 
-    def test_set_warmup(self):
+    def test_algorithm_set_warmup(self):
         self.algorithm1.SetWarmUp(123)
         self.algorithm2.SetWarmUp(321)
         # pylint: disable=E1101
-        self.assertEqual(self.qc._warm_up_period, 321)
+        self.assertEqual(self.qc._warm_up, 321)
+
+    def test_algorithm_set_start_date(self):
+        self.algorithm1.SetStartDate(2025, 12, 1)
+        self.algorithm2.SetStartDate(1931, 10, 5)
+        self.assertEqual(self.qc._start_date, date(1931, 10, 5))
+
+    def test_algorithm_set_end_date(self):
+        self.algorithm1.SetEndDate(1931, 10, 5)
+        self.algorithm2.SetEndDate(2025, 12, 1)
+        self.assertEqual(self.qc._end_date, date(2025, 12, 1))
+
+    def test_qc_set_warmup_should_not_override_algorithm(self):
+        self.algorithm1.SetWarmUp(123)
+        self.algorithm2.SetWarmUp(321)
+        self.qc.SetWarmUp(444)
+        self.assertEqual(self.qc._warm_up, 321)
+
+    def test_qc_set_warmup_from_main(self):
+        self.qc.SetWarmUp(444)
+        self.assertEqual(self.qc._warm_up, 444)
+
+    def test_qc_set_start_date_overrides_algorithm(self):
+        self.algorithm1.SetStartDate(2025, 12, 1)
+        self.algorithm2.SetStartDate(1931, 10, 5)
+        self.qc.SetStartDate(2020, 10, 1)
+        self.assertEqual(self.qc._start_date, date(2020, 10, 1))
+
+    def test_qc_set_end_date_overrides_algorithm(self):
+        self.algorithm1.SetEndDate(1931, 10, 5)
+        self.algorithm2.SetEndDate(2025, 12, 1)
+        self.qc.SetEndDate(2020, 10, 1)
+        self.assertEqual(self.qc._end_date, date(2020, 10, 1))
+
 
 class TestSimpleAlgorithm(unittest.TestCase):
     def setUp(self):

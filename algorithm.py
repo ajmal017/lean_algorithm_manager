@@ -2,9 +2,11 @@
 MD5: 41dcbf44c8d01d513003d01eaa152ef9
 """
 
+from datetime import timedelta
+
 # pylint: disable=C0321,C0103,W0613,R0201,R0913, R0904, C0111
 try: QCAlgorithm
-except NameError: from mocked import OrderType, OrderDirection, OrderStatus, OrderEvent, Symbol, QCAlgorithm
+except NameError: from mocked import TradeBarConsolidator, OrderType, OrderStatus, Symbol, QCAlgorithm
 
 from market import Portfolio, InternalOrder, InternalSecurity, Securities, Singleton
 from decorators import accepts, convert_to_symbol
@@ -25,7 +27,7 @@ class SimpleAlgorithm(object):
         else:
             raise AttributeError, attr
 
-    def ExecuteOrders(self):
+    def post(self):
         pass
 
     @property
@@ -59,7 +61,7 @@ class Algorithm(SimpleAlgorithm):
         self.Portfolio.SetupLog(self)
         self.Initialize()
 
-    def ExecuteOrders(self):
+    def post(self):
         self.Portfolio.Broker.executeOrders()
 
     def __str__(self):
@@ -85,6 +87,13 @@ class Algorithm(SimpleAlgorithm):
                 return True
 
         return False
+
+    def CreateRollingWindow(self, symbol, window_size):
+        rolling_window = RollingWindow[TradeBar](window_size)
+        consolidator = TradeBarConsolidator(timedelta(1))
+        consolidator.DataConsolidated += lambda _, bar: rolling_window.Add(bar)
+        self.SubscriptionManager.AddConsolidator(symbol, consolidator)
+        return rolling_window
 
     ######################################################################
     @accepts(self=object, ticker=(str, Symbol), resolution=int)

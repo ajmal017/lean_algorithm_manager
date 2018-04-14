@@ -8,6 +8,17 @@ from decorators import accepts
 
 # pylint: disable=C0103,C0325,C0321,R0903,R0201,W0102,R0902,R0913,R0904,R0911
 
+TradeBar = 0
+RollingWindow = []
+
+class TradeBarConsolidator(object):
+    def __init__(self, _time_delta):
+        self.DataConsolidated = []
+
+class SubscriptionManager(object):
+    def AddConsolidator(self, _symbol, _consolidator):
+        pass
+
 class Market(object):
     USA = 1
 

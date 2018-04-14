@@ -35,12 +35,12 @@ class AlgorithmManager(QCAlgorithm):
         Singleton.UpdateTime()
         super(AlgorithmManager, self).Error(message)
 
-    def _pre(self):
+    def pre(self):
         pass
 
-    def _post(self):
+    def post(self):
         for alg in self._algorithms:
-            alg.ExecuteOrders()
+            alg.post()
 
     def SetWarmUp(self, period):
         if period > self._warm_up_period:
@@ -62,44 +62,44 @@ class AlgorithmManager(QCAlgorithm):
     def OnData(self, data):
         if self.IsWarmingUp: return
         # self.Log("OnData")
-        self._pre()
+        self.pre()
         for alg in self._algorithms:
             alg.OnData(data)
-        self._post()
+        self.post()
 
     def OnDividend(self):
         if self.IsWarmingUp: return
         self.Log("OnDividend")
-        self._pre()
+        self.pre()
         for alg in self._algorithms:
             alg.OnDividend()
-        self._post()
+        self.post()
 
     def OnSecuritiesChanged(self, changes):
         if self.IsWarmingUp: return
         self.Log("OnSecuritiesChanged {0}".format(changes))
-        self._pre()
+        self.pre()
         for alg in self._algorithms:
             # Only call if there's a relevant stock in alg
             alg.OnSecuritiesChanged(changes)
-        self._post()
+        self.post()
 
     def OnEndOfDay(self):
         if self.IsWarmingUp: return
         # self.Log("OnEndOfDay")
-        self._pre()
+        self.pre()
         for alg in self._algorithms:
             alg.OnEndOfDay()
-        self._post()
+        self.post()
         for i in self._algorithms + self._benchmarks:
             self.Plot('Performance', i.Name, i.Performance)
 
     def OnEndOfAlgorithm(self):
         self.Log("OnEndOfAlgorithm")
-        self._pre()
+        self.pre()
         for alg in self._algorithms:
             alg.OnEndOfAlgorithm()
-        self._post()
+        self.post()
 
     @accepts(self=object, order_event=OrderEvent)
     def OnOrderEvent(self, order_event):

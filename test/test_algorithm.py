@@ -17,16 +17,12 @@ class Algorithm1(Algorithm):
 
     def Initialize(self):
         self.SetCash(100000)
-        self.SetStartDate(2016, 1, 1)
-        self.SetEndDate(2017, 1, 1)
         self.stock = self.AddEquity(FOO, Resolution.Daily).Symbol
 
 
 class Algorithm2(Algorithm):
     def Initialize(self):
         self.SetCash(100000)
-        self.SetStartDate(2016, 1, 1)
-        self.SetEndDate(2017, 1, 1)
         self.stock = self.AddEquity("bar", Resolution.Daily).Symbol
 
 
@@ -79,16 +75,6 @@ class TestMultipleAlgorithms(unittest.TestCase):
         # pylint: disable=E1101
         self.assertEqual(self.qc._warm_up, 321)
 
-    def test_algorithm_set_start_date(self):
-        self.algorithm1.SetStartDate(2025, 12, 1)
-        self.algorithm2.SetStartDate(1931, 10, 5)
-        self.assertEqual(self.qc._start_date, date(1931, 10, 5))
-
-    def test_algorithm_set_end_date(self):
-        self.algorithm1.SetEndDate(1931, 10, 5)
-        self.algorithm2.SetEndDate(2025, 12, 1)
-        self.assertEqual(self.qc._end_date, date(2025, 12, 1))
-
     def test_qc_set_warmup_should_not_override_algorithm(self):
         self.algorithm1.SetWarmUp(123)
         self.algorithm2.SetWarmUp(321)
@@ -98,18 +84,6 @@ class TestMultipleAlgorithms(unittest.TestCase):
     def test_qc_set_warmup_from_main(self):
         self.qc.SetWarmUp(444)
         self.assertEqual(self.qc._warm_up, 444)
-
-    def test_qc_set_start_date_overrides_algorithm(self):
-        self.algorithm1.SetStartDate(2025, 12, 1)
-        self.algorithm2.SetStartDate(1931, 10, 5)
-        self.qc.SetStartDate(2020, 10, 1)
-        self.assertEqual(self.qc._start_date, date(2020, 10, 1))
-
-    def test_qc_set_end_date_overrides_algorithm(self):
-        self.algorithm1.SetEndDate(1931, 10, 5)
-        self.algorithm2.SetEndDate(2025, 12, 1)
-        self.qc.SetEndDate(2020, 10, 1)
-        self.assertEqual(self.qc._end_date, date(2020, 10, 1))
 
 
 class TestSimpleAlgorithm(unittest.TestCase):

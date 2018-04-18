@@ -6,7 +6,6 @@ MD5: c614a780bc6c81bc30f04767f6b26339
 try: QCAlgorithm
 except NameError: from mocked import *  # pylint: disable=W0614,W0401
 
-from datetime import date
 from market import Singleton
 from decorators import accepts
 
@@ -20,10 +19,6 @@ class AlgorithmManager(QCAlgorithm):
         self._benchmarks = benchmarks
         self._warm_up = None
         self._warm_up_from_algorithm = False
-        self._start_date = None
-        self._start_date_from_parent = False
-        self._end_date = None
-        self._end_date_from_parent = False
 
         plot = Chart('Performance')
         for i in algorithms + benchmarks:
@@ -53,42 +48,14 @@ class AlgorithmManager(QCAlgorithm):
         self._warm_up = period
         super(AlgorithmManager, self).SetWarmUp(period)
 
-    def _set_start_date(self, start_date):
-        self._start_date = start_date
-        super(AlgorithmManager, self).SetStartDate(start_date.year, start_date.month, start_date.day)
-
-    def _set_end_date(self, end_date):
-        self._end_date = end_date
-        super(AlgorithmManager, self).SetEndDate(end_date.year, end_date.month, end_date.day)
-
     def SetWarmUp(self, period):
         if not self._warm_up_from_algorithm:
             self._set_warm_up(period)
-
-    def SetStartDate(self, year, month, day):
-        self._start_date_from_parent = True
-        self._set_start_date(date(year, month, day))
-
-    def SetEndDate(self, year, month, day):
-        self._end_date_from_parent = True
-        self._set_end_date(date(year, month, day))
 
     def SetWarmUpFromAlgorithm(self, period):
         self._warm_up_from_algorithm = True
         if not self._warm_up or period > self._warm_up:
             self._set_warm_up(period)
-
-    def SetStartDateFromAlgorithm(self, year, month, day):
-        if not self._start_date_from_parent:
-            start_date = date(year, month, day)
-            if not self._start_date or start_date < self._start_date:
-                self._set_start_date(start_date)
-
-    def SetEndDateFromAlgorithm(self, year, month, day):
-        if not self._end_date_from_parent:
-            end_date = date(year, month, day)
-            if not self._end_date or end_date > self._end_date:
-                self._set_end_date(end_date)
 
     def CoarseSelectionFunction(self, coarse):
         symbols = []

@@ -296,10 +296,6 @@ class QCAlgorithm(object):
         self.Time = ""
         self._warm_up = None
         self._warm_up_from_algorithm = False
-        self._start_date = None
-        self._start_date_from_parent = False
-        self._end_date = None
-        self._end_date_from_parent = False
         self.Initialize()
 
     def Initialize(self): pass

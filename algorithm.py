@@ -37,12 +37,6 @@ class SimpleAlgorithm(object):
     def SetWarmUp(self, period):
         self._parent.SetWarmUpFromAlgorithm(period)
 
-    def SetStartDate(self, year, month, day):
-        self._parent.SetStartDateFromAlgorithm(year, month, day)
-
-    def SetEndDate(self, year, month, day):
-        self._parent.SetEndDateFromAlgorithm(year, month, day)
-
     ######################################################################
     def CoarseSelectionFunction(self, coarse): return []
     def FineSelectionFunction(self, fine): return []
@@ -54,6 +48,8 @@ class SimpleAlgorithm(object):
     def OnOrderEvent(self, order_event): pass
     def Initialize(self): pass
     def SetCash(self, cash): pass
+    def SetStartDate(self, year, month, day): pass
+    def SetEndDate(self, year, month, day): pass
     def Log(self, message): Singleton.QCAlgorithm.Log("[%s] %s" % (self.Name, message))
     def Debug(self, message): Singleton.QCAlgorithm.Log("[%s-DEBUG] %s" % (self.Name, message))
     def Error(self, message): Singleton.QCAlgorithm.Log("[%s-ERROR] %s" % (self.Name, message))
@@ -61,8 +57,9 @@ class SimpleAlgorithm(object):
 
 
 class Algorithm(SimpleAlgorithm):
-    def __init__(self, broker, cash, name="anonymous"):
+    def __init__(self, broker, cash, name="anonymous", options={}):
         super(Algorithm, self).__init__(cash=cash, name=name, initialize=False)
+        self.Options = options
         self.Securities = Securities()
         self.Portfolio = Portfolio(broker=broker, cash=cash, name=name)
         self.Portfolio.SetupLog(self)

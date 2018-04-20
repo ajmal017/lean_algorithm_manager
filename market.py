@@ -9,16 +9,23 @@ except NameError: from mocked import *
 from decimal import Decimal
 from decorators import accepts
 
-
 # pylint: disable=C0111,C0103,C0112,E1136,R0903,R0913,R0914,R0902,R0911
 
+
 class Singleton(object):
+    ERROR = 0
+    INFO = 1
+    LOG = 2
+    DEBUG = 3
+
     QCAlgorithm = None
     Time = None
+    LogLevel = INFO
 
     @classmethod
-    def Setup(cls, parent):
+    def Setup(cls, parent, log_level=INFO):
         cls.QCAlgorithm = parent
+        cls.LogLevel = log_level
 
     @classmethod
     def UpdateTime(cls):
@@ -170,12 +177,14 @@ class Portfolio(ISymbolDict):
         self.UnsettledCashBook = 0.0
         self.Log = Singleton.QCAlgorithm.Log
         self.Debug = Singleton.QCAlgorithm.Debug
+        self.Info = Singleton.QCAlgorithm.Info
         self.Error = Singleton.QCAlgorithm.Error
 
     def SetupLog(self, algorithm):
         self.Broker.SetupLog(algorithm)
         self.Log = algorithm.Log
         self.Debug = algorithm.Debug
+        self.Info = algorithm.Info
         self.Error = algorithm.Error
 
     def NoValue(self, key):
@@ -232,18 +241,18 @@ class Portfolio(ISymbolDict):
     # @accepts(self=object, order_event=OrderEvent, order=object)
     def ProcessOrderEvent(self, order_event, order):
         if order_event.Status == OrderStatus.Invalid:
-            self.Log("INVALID: {0}".format(order_event))
+            self.Debug("INVALID: {0}".format(order_event))
 
         elif order_event.Status in [OrderStatus.Filled, OrderStatus.PartiallyFilled]:
             prefix = "PARTIALLY " if order_event.Status == OrderStatus.PartiallyFilled else ""
-            self.Log("{0}FILLED: {1} at FILL PRICE: {2}".format(prefix, order_event, order_event.FillPrice))
-            self.Log("Before: {}".format(self[order.Symbol].Quantity))
+            self.Debug("{0}FILLED: {1} at FILL PRICE: {2}".format(prefix, order_event, order_event.FillPrice))
+            self.Debug("Before: {}".format(self[order.Symbol].Quantity))
             self.FillOrder(order.Symbol, float(order_event.FillQuantity),
                            float(order_event.FillPrice), float(order_event.OrderFee))
-            self.Log("After: {}".format(self[order.Symbol].Quantity))
+            self.Debug("After: {}".format(self[order.Symbol].Quantity))
 
         else:
-            self.Log("????: {0} at FILL PRICE: {1}".format(order_event, order_event.FillPrice))
+            self.Debug("????: {0} at FILL PRICE: {1}".format(order_event, order_event.FillPrice))
 
 
     # @accepts(self=object, symbol=Symbol, quantity=(int, float), price_per_share=(float), fees=(float))
@@ -261,19 +270,19 @@ class Portfolio(ISymbolDict):
         remaining_quantity = self[symbol].Quantity
         if remaining_quantity < 0:
             message = "InternalOrder removed too many positions of %s" % symbol
-            self.Log("EXCEPTION: %s" % message)
+            self.Debug("EXCEPTION: %s" % message)
             raise Exception(message)
         elif remaining_quantity == 0:
             self.pop(symbol)
 
     # @accepts(self=object, order=InternalOrder)
     def AddOrder(self, order):
-        self.Log("Adding Order {}".format(order))
+        self.Debug("Adding Order {}".format(order))
         if order.Quantity == 0:
-            self.Log("Warning: Avoiding submitting order that has zero quantity.")
+            self.Debug("Warning: Avoiding submitting order that has zero quantity.")
             return
         self.Broker.AddOrder(order)
-        self.Log("Added Order")
+        self.Debug("Added Order")
 
 
     @accepts(self=object, symbol=(Symbol, None), tag=str)
@@ -349,7 +358,7 @@ class Portfolio(ISymbolDict):
 
             # orderFees = security.FeeModel.GetOrderFee(security, order)
             orderFees = self.GetOrderFee(orderValue, orderQuantity)
-            self.Log("order: Quantity={}, Value={}, Fees={}".format(orderQuantity, orderValue, orderFees))
+            self.Debug("order: Quantity={}, Value={}, Fees={}".format(orderQuantity, orderValue, orderFees))
 
             # find an incremental delta value for the next iteration step
             feeToPriceRatio = orderFees / unit_price
@@ -454,6 +463,7 @@ class Broker(object):
         self.submitted = {}
         self.Log = Singleton.QCAlgorithm.Log
         self.Debug = Singleton.QCAlgorithm.Debug
+        self.Info = Singleton.QCAlgorithm.Info
         self.Error = Singleton.QCAlgorithm.Error
         if Singleton.QCAlgorithm.LiveMode:
             self._loadFromBroker()
@@ -461,6 +471,7 @@ class Broker(object):
     def SetupLog(self, algorithm):
         self.Log = algorithm.Log
         self.Debug = algorithm.Debug
+        self.Info = algorithm.Info
         self.Error = algorithm.Error
 
     def __str__(self):
@@ -471,7 +482,7 @@ class Broker(object):
 
     def _loadFromBroker(self):
         if Singleton.QCAlgorithm.Portfolio.Invested:
-            self.Log("_loadFromBroker")
+            self.Debug("_loadFromBroker")
             positions = [x for x in Singleton.QCAlgorithm.Portfolio.Securities
                          if x.Value.Holdings.AbsoluteQuantity != 0]
             for position in positions:
@@ -488,7 +499,7 @@ class Broker(object):
         if virtual_funds > real_funds:
             message = "Insufficient funds in real portfolio ($%.2f) \
                       to support running algorithms ($%.2f)." % (real_funds, virtual_funds)
-            self.Log("EXCEPTION: %s" % message)
+            self.Debug("EXCEPTION: %s" % message)
             raise Exception(message)
 
     @accepts(self=object, order=InternalOrder)
@@ -524,7 +535,7 @@ class Broker(object):
                         order.Quantity -= avail_qty
 
                 else:
-                    self.Log("price_per_share == 0.0")
+                    self.Debug("price_per_share == 0.0")
 
             if not filled_order:
                 remaining_orders.append(order)
@@ -540,7 +551,7 @@ class Broker(object):
             qty = order.Quantity
             price_per_share = Singleton.QCAlgorithm.Securities[symb.Value].Price
 
-            self.Log("Submitting a %s (est: $%.2f/share)" % (order, price_per_share))
+            self.Debug("Submitting a %s (est: $%.2f/share)" % (order, price_per_share))
 
             # Submit order.
             if order.OrderType == OrderType.Market:

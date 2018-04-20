@@ -290,10 +290,11 @@ class QCAlgorithm(object):
         self.Transactions = SecurityTransactionManager()
         self.LiveMode = False
         self.IsWarmingUp = False
-        self._default_order_status = default_order_status
-        self._algorithms = []
         self.SetBrokerageModel = BrokerageName.Default
         self.Time = ""
+        self._default_order_status = default_order_status
+        self._algorithms = []
+        self._benchmarks = []
         self._warm_up = None
         self._warm_up_from_algorithm = False
         self.Initialize()
@@ -306,6 +307,7 @@ class QCAlgorithm(object):
     def OnOrderEvent(self, order_event): pass
     def Log(self, message): print(message)
     def Debug(self, message): print(message)
+    def Info(self, message): print(message)
     def Error(self, message): print(message)
     def AddChart(self, plot): pass
     def Plot(self, chart_name, series_name, value): pass

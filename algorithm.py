@@ -50,9 +50,10 @@ class SimpleAlgorithm(object):
     def SetCash(self, cash): pass
     def SetStartDate(self, year, month, day): pass
     def SetEndDate(self, year, month, day): pass
-    def Log(self, message): Singleton.QCAlgorithm.Log("[%s] %s" % (self.Name, message))
-    def Debug(self, message): Singleton.QCAlgorithm.Log("[%s-DEBUG] %s" % (self.Name, message))
-    def Error(self, message): Singleton.QCAlgorithm.Log("[%s-ERROR] %s" % (self.Name, message))
+    def Log(self, message): Singleton.QCAlgorithm.Log("LOG [%s] %s" % (self.Name, message))
+    def Debug(self, message): Singleton.QCAlgorithm.Debug("DEBUG [%s] %s" % (self.Name, message))
+    def Info(self, message): Singleton.QCAlgorithm.Info("INFO [%s] %s" %(self.Name, message))
+    def Error(self, message): Singleton.QCAlgorithm.Error("ERROR [%s] %s" % (self.Name, message))
     def TryToFillOnOrderEvent(self, order_event): return True
 
 
@@ -81,11 +82,11 @@ class Algorithm(SimpleAlgorithm):
     # Can't use this
     # @accepts(self=object, order_event=OrderEvent)
     def TryToFillOnOrderEvent(self, order_event):
-        self.Log("OrderID: {}".format(order_event.OrderId))
-        self.Log("Submitted: {}".format(self.Portfolio.Broker.submitted))
+        self.Debug("OrderID: {}".format(order_event.OrderId))
+        self.Debug("Submitted: {}".format(self.Portfolio.Broker.submitted))
         order = self.Portfolio.Broker.submitted.pop(order_event.OrderId, None)
         if order:
-            self.Log("ORDER: {0}".format(order))
+            self.Debug("ORDER: {0}".format(order))
             order.Portfolio.ProcessOrderEvent(order_event, order)
             return True
         return False
@@ -125,51 +126,51 @@ class Algorithm(SimpleAlgorithm):
     @convert_to_symbol('symbol', Singleton.CreateSymbol)
     def MarketOrder(self, symbol, quantity, tag=""):
         # symbol = self._fetchSymbol(symbol)
-        self.Log("MarketOrder(%s, %f)" % (symbol, quantity))
+        self.Debug("MarketOrder(%s, %f)" % (symbol, quantity))
         return self._createOrder(symbol, quantity, OrderType.Market, tag=self._tag(tag))
 
     @convert_to_symbol('symbol', Singleton.CreateSymbol)
     def LimitOrder(self, symbol, quantity, limit_price, tag=""):
         # symbol = self._fetchSymbol(symbol)
-        self.Log("LimitOrder(%s, %f)" % (symbol, quantity))
+        self.Debug("LimitOrder(%s, %f)" % (symbol, quantity))
         return self._createOrder(symbol, quantity, OrderType.Limit, limit_price=limit_price,
                                  tag=self._tag(tag))
 
     @convert_to_symbol('symbol', Singleton.CreateSymbol)
     def StopMarketOrder(self, symbol, quantity, stop_price, tag=""):
         # symbol = self._fetchSymbol(symbol)
-        self.Log("StopMarketOrder(%s, %f)" % (symbol, quantity))
+        self.Debug("StopMarketOrder(%s, %f)" % (symbol, quantity))
         return self._createOrder(symbol, quantity, OrderType.Limit, stop_price=stop_price,
                                  tag=self._tag(tag))
 
     @convert_to_symbol('symbol', Singleton.CreateSymbol)
     def StopLimitOrder(self, symbol, quantity, stop_price, limit_price, tag=""):
         # symbol = self._fetchSymbol(symbol)
-        self.Log("StopLimitOrder(%s, %f)" % (symbol, quantity))
+        self.Debug("StopLimitOrder(%s, %f)" % (symbol, quantity))
         return self._createOrder(symbol, quantity, OrderType.Limit, stop_price=stop_price,
                                  limit_price=limit_price, tag=self._tag(tag))
 
     @convert_to_symbol('symbol', Singleton.CreateSymbol)
     def MarketOnOpenOrder(self, symbol, quantity, tag=""):
         # symbol = self._fetchSymbol(symbol)
-        self.Log("MarketOnOpenOrder(%s, %f)" % (symbol, quantity))
+        self.Debug("MarketOnOpenOrder(%s, %f)" % (symbol, quantity))
         return self._createOrder(symbol, quantity, OrderType.MarketOnOpen, tag=self._tag(tag))
 
     @convert_to_symbol('symbol', Singleton.CreateSymbol)
     def MarketOnCloseOrder(self, symbol, quantity, tag=""):
         # symbol = self._fetchSymbol(symbol)
-        self.Log("MarketOnCloseOrder(%s, %f)" % (symbol, quantity))
+        self.Debug("MarketOnCloseOrder(%s, %f)" % (symbol, quantity))
         return self._createOrder(symbol, quantity, OrderType.MarketOnClose, tag=self._tag(tag))
 
     @convert_to_symbol('symbol', Singleton.CreateSymbol)
     def OptionExerciseOrder(self, symbol, quantity, tag=""):
         # symbol = self._fetchSymbol(symbol)
-        self.Log("OptionExerciseOrder(%s, %f)" % (symbol, quantity))
+        self.Debug("OptionExerciseOrder(%s, %f)" % (symbol, quantity))
         return self._createOrder(symbol, quantity, OrderType.OptionExercise, tag=self._tag(tag))
 
     @convert_to_symbol('symbol', Singleton.CreateSymbol)
     def SetHoldings(self, symbol, percentage, liquidateExistingHoldings=False, tag=""):
-        self.Log("SetHoldings(%s, %f)" % (symbol, percentage))
+        self.Debug("SetHoldings(%s, %f)" % (symbol, percentage))
         if liquidateExistingHoldings:
             to_liquidate = [s for s, p in iter(self.Portfolio.items()) if s != symbol and p.Quantity > 0]
             for s in to_liquidate:
@@ -184,7 +185,7 @@ class Algorithm(SimpleAlgorithm):
         # symbol = self._fetchSymbol(symbol)
         tag = 'Liquidated' if not tag else tag + ': Liquidated'
         if symbol is None:
-            self.Log("Liquidate()")
+            self.Debug("Liquidate()")
         else:
-            self.Log("Liquidate(%s)" % symbol)
+            self.Debug("Liquidate(%s)" % symbol)
         self.Portfolio.Liquidate(symbol=symbol, tag=self._tag(tag))

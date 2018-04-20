@@ -26,12 +26,20 @@ class AlgorithmManager(QCAlgorithm):
         self.AddChart(plot)
 
     def Log(self, message):
-        Singleton.UpdateTime()
-        super(AlgorithmManager, self).Log(message)
+        if Singleton.LogLevel >= Singleton.LOG:
+            Singleton.UpdateTime()
+            super(AlgorithmManager, self).Log(message)
 
     def Debug(self, message):
-        Singleton.UpdateTime()
-        super(AlgorithmManager, self).Debug(message)
+        if Singleton.LogLevel >= Singleton.DEBUG:
+            Singleton.UpdateTime()
+            super(AlgorithmManager, self).Log(message)
+
+    def Info(self, message):
+        if Singleton.LogLevel >= Singleton.INFO:
+            Singleton.UpdateTime()
+            super(AlgorithmManager, self).Log(message)
+            super(AlgorithmManager, self).Debug(message)
 
     def Error(self, message):
         Singleton.UpdateTime()
@@ -71,7 +79,7 @@ class AlgorithmManager(QCAlgorithm):
 
     def OnData(self, data):
         if self.IsWarmingUp: return
-        # self.Log("OnData")
+        # self.Debug("OnData")
         self.pre()
         for alg in self._algorithms:
             alg.OnData(data)
@@ -79,7 +87,7 @@ class AlgorithmManager(QCAlgorithm):
 
     def OnDividend(self):
         if self.IsWarmingUp: return
-        self.Log("OnDividend")
+        self.Debug("OnDividend")
         self.pre()
         for alg in self._algorithms:
             alg.OnDividend()
@@ -87,7 +95,7 @@ class AlgorithmManager(QCAlgorithm):
 
     def OnSecuritiesChanged(self, changes):
         if self.IsWarmingUp: return
-        self.Log("OnSecuritiesChanged {0}".format(changes))
+        self.Debug("OnSecuritiesChanged {0}".format(changes))
         self.pre()
         for alg in self._algorithms:
             # Only call if there's a relevant stock in alg
@@ -96,7 +104,7 @@ class AlgorithmManager(QCAlgorithm):
 
     def OnEndOfDay(self):
         if self.IsWarmingUp: return
-        # self.Log("OnEndOfDay")
+        # self.Debug("OnEndOfDay")
         self.pre()
         for alg in self._algorithms:
             alg.OnEndOfDay()
@@ -105,7 +113,7 @@ class AlgorithmManager(QCAlgorithm):
             self.Plot('Performance', i.Name, i.Performance)
 
     def OnEndOfAlgorithm(self):
-        self.Log("OnEndOfAlgorithm")
+        self.Debug("OnEndOfAlgorithm")
         self.pre()
         for alg in self._algorithms:
             alg.OnEndOfAlgorithm()
@@ -113,12 +121,12 @@ class AlgorithmManager(QCAlgorithm):
 
     @accepts(self=object, order_event=OrderEvent)
     def OnOrderEvent(self, order_event):
-        self.Log("OnOrderEvent {0}".format(OrderEvent))
+        self.Debug("OnOrderEvent {0}".format(OrderEvent))
         if order_event.Status not in [OrderStatus.Submitted, OrderStatus.New]:
-            self.Log("OnOrderEvent (1)")
+            self.Debug("OnOrderEvent (1)")
             for alg in self._algorithms:
-                self.Log("OnOrderEvent (2...)")
+                self.Debug("OnOrderEvent (2...)")
                 if alg.TryToFillOnOrderEvent(order_event):
-                    self.Log("OnOrderEvent (3)")
+                    self.Debug("OnOrderEvent (3)")
                     return
             self.Debug("Could not find matching order")

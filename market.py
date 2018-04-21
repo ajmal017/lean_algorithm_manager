@@ -6,11 +6,12 @@ MD5: f4f24493fd64a097fcbfb96d8e079243
 try: QCAlgorithm
 except NameError: from mocked import *
 
+import bisect
+from datetime import date
 from decimal import Decimal
 from decorators import accepts
 
 # pylint: disable=C0111,C0103,C0112,E1136,R0903,R0913,R0914,R0902,R0911
-
 
 class Singleton(object):
     ERROR = 0
@@ -21,11 +22,29 @@ class Singleton(object):
     QCAlgorithm = None
     Time = None
     LogLevel = INFO
+    _log_level_dates = []
+
 
     @classmethod
     def Setup(cls, parent, log_level=INFO):
+        cls.Time = date(1, 1, 1)
         cls.QCAlgorithm = parent
         cls.LogLevel = log_level
+
+    @classmethod
+    def SetStartDateLogLevel(cls, log_level, year, month, day):
+        bisect.insort(cls._log_level_dates, (date(year, month, day), log_level))
+
+    @classmethod
+    def LogLevelPrintable(cls, log_level):
+        matched_log_level = cls.LogLevel
+        for elem in cls._log_level_dates:
+            if elem[0] <= cls.Time:
+                matched_log_level = elem[1]
+            else:
+                break
+        return log_level <= matched_log_level
+
 
     @classmethod
     def UpdateTime(cls):

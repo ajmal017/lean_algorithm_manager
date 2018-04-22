@@ -1,5 +1,5 @@
 """
-MD5: f4f24493fd64a097fcbfb96d8e079243
+MD5: a1542f0bdfe75aa0300683c1fb1a7076
 """
 
 # pylint: disable=C0321,W0401,W0614
@@ -527,12 +527,18 @@ class Broker(object):
 
             self.Debug("Submitting a %s (est: $%.2f/share)" % (order, price_per_share))
 
+            market_is_open = Singleton.QCAlgorithm.Securities[symb.Value].Exchange.DateTimeIsOpen(
+                Singleton.Time)
+
             # Submit order.
             if order.OrderType == OrderType.Market:
                 asynchronous = False
                 if qty < 0:
                     asynchronous = False
-                ticket = Singleton.QCAlgorithm.MarketOrder(symb, qty, asynchronous, order.tag)
+                if market_is_open:
+                    ticket = Singleton.QCAlgorithm.MarketOrder(symb, qty, asynchronous, order.tag)
+                else:
+                    ticket = Singleton.QCAlgorithm.MarketOnOpenOrder(symb, qty, order.tag)
             elif order.Type == OrderType.Limit:
                 ticket = Singleton.QCAlgorithm.LimitOrder(symb, qty, order.LimitPrice, order.tag)
             elif order.Type == OrderType.StopMarket:

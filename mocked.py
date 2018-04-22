@@ -1,7 +1,8 @@
 """
-MD5: acfb3f8e6f320742ca005a8868aeb86b
+MD5: 328d585a4f8f6d39574a171a6c53f445
 """
 
+from datetime import date
 from decimal import Decimal
 from decorators import accepts
 
@@ -59,6 +60,12 @@ class SymbolProperties(object):
     def LotSize(self):
         return Decimal(1)
 
+
+class Exchange(object):
+    def DateTimeIsOpen(self, _time):
+        return True
+
+
 class Security(object):
     @accepts(self=object, ticker=(str, Symbol), price=(float, int))
     def __init__(self, ticker, price):
@@ -71,6 +78,10 @@ class Security(object):
         self.Open = self.Price
         self.Volume = 0.0
         self.SymbolProperties = SymbolProperties()
+
+    @property
+    def Exchange(self):
+        return Exchange()
 
 
 class InternalSecurityManager(dict):
@@ -281,6 +292,11 @@ class SecurityTransactionManager(dict):
     def GetSufficientCapitalForOrder(self, _SecurityPortfolioManager, _Order):
         return True
 
+class Time:
+    TODAY = date(1, 1, 1)
+    @classmethod
+    def date(cls):
+        return Time.TODAY
 
 # Dummy interface.
 class QCAlgorithm(object):
@@ -291,7 +307,7 @@ class QCAlgorithm(object):
         self.LiveMode = False
         self.IsWarmingUp = False
         self.SetBrokerageModel = BrokerageName.Default
-        self.Time = ""
+        self.Time = Time
         self._default_order_status = default_order_status
         self._algorithms = []
         self._benchmarks = []
@@ -363,4 +379,3 @@ class Series(object):
 class Chart(object):
     def __init__(self, name): pass
     def AddSeries(self, series): pass
-

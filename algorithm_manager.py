@@ -1,49 +1,119 @@
 """
-MD5: c614a780bc6c81bc30f04767f6b26339
+MD5: 2e2ed4bd9993324cd132c6aca2c1d0ab
 """
 
 # pylint: disable=C0321,C0111,W0201,C0413
 try: QCAlgorithm
 except NameError: from mocked import *  # pylint: disable=W0614,W0401
 
-from market import Singleton
+import bisect
+from datetime import date
 from decorators import accepts
+
+
+class SingletonMeta(type):
+    def __getattr__(cls, attr):
+        """Delegate to parent."""
+        if hasattr(cls.QCAlgorithm, attr):
+            return getattr(cls.QCAlgorithm, attr)
+        else:
+            raise AttributeError(attr)
+
+class Singleton(metaclass=SingletonMeta):
+    ERROR = 0
+    INFO = 1
+    LOG = 2
+    DEBUG = 3
+
+    Today = date(1, 1, 1)
+    QCAlgorithm = None
+    LogLevel = INFO
+    _log_level_dates = []
+    _warm_up = None
+    _warm_up_from_algorithm = False
+
+    @classmethod
+    def Setup(cls, parent, log_level=INFO):
+        cls.Today = date(1, 1, 1)
+        cls.QCAlgorithm = parent
+        cls.LogLevel = log_level
+        cls._warm_up = None
+        cls._warm_up_from_algorithm = False
+
+    @classmethod
+    def _update_time(cls):
+        if cls.Today != cls.QCAlgorithm.Time.date():
+            cls.Today = cls.QCAlgorithm.Time.date()
+            cls.QCAlgorithm.Log(" - - - - {} - - - - ".format(cls.Today))
+
+    @classmethod
+    def SetStartDateLogLevel(cls, log_level, year, month, day):
+        bisect.insort(cls._log_level_dates, (date(year, month, day), log_level))
+
+    @classmethod
+    def _can_log(cls, log_level):
+        matched_log_level = cls.LogLevel
+        for elem in cls._log_level_dates:
+            if elem[0] <= cls.Today:
+                matched_log_level = elem[1]
+            else:
+                break
+        return log_level <= matched_log_level
+
+    @classmethod
+    def Log(cls, message):
+        if cls._can_log(cls.LOG):
+            cls._update_time()
+            cls.QCAlgorithm.Log(message)
+
+    @classmethod
+    def Debug(cls, message):
+        if cls._can_log(cls.DEBUG):
+            cls.QCAlgorithm.Log(message)
+
+    @classmethod
+    def Info(cls, message):
+        if cls._can_log(cls.INFO):
+            cls.QCAlgorithm.Log(message)
+            cls.QCAlgorithm.Debug(message)
+
+    @classmethod
+    def Error(cls, message):
+        if cls._can_log(cls.ERROR):
+            cls.QCAlgorithm.Error(message)
+
+    @classmethod
+    def CreateSymbol(cls, ticker):
+        return cls.QCAlgorithm.Securities[ticker].Symbol
+
+    @classmethod
+    def _set_warm_up(cls, period):
+        cls._warm_up = period
+        Singleton.QCAlgorithm.SetWarmUp(period)
+
+    @classmethod
+    def SetWarmUp(cls, period):
+        if not cls._warm_up_from_algorithm:
+            cls._set_warm_up(period)
+
+    @classmethod
+    def SetWarmUpFromAlgorithm(cls, period):
+        cls._warm_up_from_algorithm = True
+        if not cls._warm_up or period > cls._warm_up:
+            cls._set_warm_up(period)
 
 
 class AlgorithmManager(QCAlgorithm):
 
     @accepts(self=object, algorithms=list, benchmarks=list)
     def registerAlgorithms(self, algorithms, benchmarks):
-        Singleton.QCAlgorithm = self
         self._algorithms = algorithms
         self._benchmarks = benchmarks
-        self._warm_up = None
-        self._warm_up_from_algorithm = False
 
         plot = Chart('Performance')
         for i in algorithms + benchmarks:
             plot.AddSeries(Series(i.Name, SeriesType.Line, 0, '%'))
         self.AddChart(plot)
-
-    def Log(self, message):
-        if Singleton.LogLevel >= Singleton.LOG:
-            Singleton.UpdateTime()
-            super(AlgorithmManager, self).Log(message)
-
-    def Debug(self, message):
-        if Singleton.LogLevel >= Singleton.DEBUG:
-            Singleton.UpdateTime()
-            super(AlgorithmManager, self).Log(message)
-
-    def Info(self, message):
-        if Singleton.LogLevel >= Singleton.INFO:
-            Singleton.UpdateTime()
-            super(AlgorithmManager, self).Log(message)
-            super(AlgorithmManager, self).Debug(message)
-
-    def Error(self, message):
-        Singleton.UpdateTime()
-        super(AlgorithmManager, self).Error(message)
 
     def pre(self):
         pass
@@ -51,19 +121,6 @@ class AlgorithmManager(QCAlgorithm):
     def post(self):
         for alg in self._algorithms:
             alg.post()
-
-    def _set_warm_up(self, period):
-        self._warm_up = period
-        super(AlgorithmManager, self).SetWarmUp(period)
-
-    def SetWarmUp(self, period):
-        if not self._warm_up_from_algorithm:
-            self._set_warm_up(period)
-
-    def SetWarmUpFromAlgorithm(self, period):
-        self._warm_up_from_algorithm = True
-        if not self._warm_up or period > self._warm_up:
-            self._set_warm_up(period)
 
     def CoarseSelectionFunction(self, coarse):
         symbols = []
@@ -79,7 +136,7 @@ class AlgorithmManager(QCAlgorithm):
 
     def OnData(self, data):
         if self.IsWarmingUp: return
-        # self.Debug("OnData")
+        # Singleton.Debug("OnData")
         self.pre()
         for alg in self._algorithms:
             alg.OnData(data)
@@ -87,7 +144,7 @@ class AlgorithmManager(QCAlgorithm):
 
     def OnDividend(self):
         if self.IsWarmingUp: return
-        self.Debug("OnDividend")
+        Singleton.Debug("OnDividend")
         self.pre()
         for alg in self._algorithms:
             alg.OnDividend()
@@ -95,7 +152,7 @@ class AlgorithmManager(QCAlgorithm):
 
     def OnSecuritiesChanged(self, changes):
         if self.IsWarmingUp: return
-        self.Debug("OnSecuritiesChanged {0}".format(changes))
+        Singleton.Debug("OnSecuritiesChanged {0}".format(changes))
         self.pre()
         for alg in self._algorithms:
             # Only call if there's a relevant stock in alg
@@ -104,7 +161,9 @@ class AlgorithmManager(QCAlgorithm):
 
     def OnEndOfDay(self):
         if self.IsWarmingUp: return
-        # self.Debug("OnEndOfDay")
+        # Singleton.Debug("OnEndOfDay")
+        if Singleton.Today.month == 1 and Singleton.Today.day == 1:
+            self.Debug("HAPPY NEW YEAR")
         self.pre()
         for alg in self._algorithms:
             alg.OnEndOfDay()
@@ -113,7 +172,7 @@ class AlgorithmManager(QCAlgorithm):
             self.Plot('Performance', i.Name, i.Performance)
 
     def OnEndOfAlgorithm(self):
-        self.Debug("OnEndOfAlgorithm")
+        Singleton.Debug("OnEndOfAlgorithm")
         self.pre()
         for alg in self._algorithms:
             alg.OnEndOfAlgorithm()
@@ -121,12 +180,12 @@ class AlgorithmManager(QCAlgorithm):
 
     @accepts(self=object, order_event=OrderEvent)
     def OnOrderEvent(self, order_event):
-        self.Debug("OnOrderEvent {0}".format(OrderEvent))
+        Singleton.Debug("OnOrderEvent {0}".format(OrderEvent))
         if order_event.Status not in [OrderStatus.Submitted, OrderStatus.New]:
-            self.Debug("OnOrderEvent (1)")
+            Singleton.Debug("OnOrderEvent (1)")
             for alg in self._algorithms:
-                self.Debug("OnOrderEvent (2...)")
+                Singleton.Debug("OnOrderEvent (2...)")
                 if alg.TryToFillOnOrderEvent(order_event):
-                    self.Debug("OnOrderEvent (3)")
+                    Singleton.Debug("OnOrderEvent (3)")
                     return
-            self.Debug("Could not find matching order")
+            Singleton.Debug("Could not find matching order")

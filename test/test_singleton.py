@@ -7,28 +7,28 @@ from algorithm_manager import AlgorithmManager as QCAlgorithm
 
 
 def assert_log_level_error(test):
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.ERROR), True)
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.INFO), False)
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.LOG), False)
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.DEBUG), False)
+    test.assertEqual(Singleton._can_log(Singleton.ERROR), True)
+    test.assertEqual(Singleton._can_log(Singleton.INFO), False)
+    test.assertEqual(Singleton._can_log(Singleton.LOG), False)
+    test.assertEqual(Singleton._can_log(Singleton.DEBUG), False)
 
 def assert_log_level_info(test):
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.ERROR), True)
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.INFO), True)
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.LOG), False)
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.DEBUG), False)
+    test.assertEqual(Singleton._can_log(Singleton.ERROR), True)
+    test.assertEqual(Singleton._can_log(Singleton.INFO), True)
+    test.assertEqual(Singleton._can_log(Singleton.LOG), False)
+    test.assertEqual(Singleton._can_log(Singleton.DEBUG), False)
 
 def assert_log_level_log(test):
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.ERROR), True)
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.INFO), True)
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.LOG), True)
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.DEBUG), False)
+    test.assertEqual(Singleton._can_log(Singleton.ERROR), True)
+    test.assertEqual(Singleton._can_log(Singleton.INFO), True)
+    test.assertEqual(Singleton._can_log(Singleton.LOG), True)
+    test.assertEqual(Singleton._can_log(Singleton.DEBUG), False)
 
 def assert_log_level_debug(test):
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.ERROR), True)
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.INFO), True)
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.LOG), True)
-    test.assertEqual(Singleton.LogLevelPrintable(Singleton.DEBUG), True)
+    test.assertEqual(Singleton._can_log(Singleton.ERROR), True)
+    test.assertEqual(Singleton._can_log(Singleton.INFO), True)
+    test.assertEqual(Singleton._can_log(Singleton.LOG), True)
+    test.assertEqual(Singleton._can_log(Singleton.DEBUG), True)
 
 
 class TestSingletonLogLevel(unittest.TestCase):
@@ -70,36 +70,36 @@ class TestSingletonLogLevelWithCustomDateRanges(unittest.TestCase):
         assert_log_level_info(self)
 
     def test_dates_simple(self):
-        Singleton.Time = date(2004, 10, 25)
+        Singleton.Today = date(2004, 10, 25)
         assert_log_level_info(self)
 
-        Singleton.Time = date(2005, 10, 25)
+        Singleton.Today = date(2005, 10, 25)
         assert_log_level_log(self)
 
-        Singleton.Time = date(2005, 11, 25)
+        Singleton.Today = date(2005, 11, 25)
         assert_log_level_log(self)
 
-        Singleton.Time = date(2006, 11, 1)
+        Singleton.Today = date(2006, 11, 1)
         assert_log_level_info(self)
 
-        Singleton.Time = date(2006, 11, 4)
+        Singleton.Today = date(2006, 11, 4)
         assert_log_level_error(self)
 
-        Singleton.Time = date(2007, 11, 1)
+        Singleton.Today = date(2007, 11, 1)
         assert_log_level_log(self)
 
-        Singleton.Time = date(2018, 11, 1)
+        Singleton.Today = date(2018, 11, 1)
         assert_log_level_debug(self)
 
     def test_dates_limit(self):
-        Singleton.Time = date(2007, 4, 30)
+        Singleton.Today = date(2007, 4, 30)
         assert_log_level_error(self)
-        Singleton.Time = date(2007, 5, 1)
+        Singleton.Today = date(2007, 5, 1)
         assert_log_level_log(self)
 
-        Singleton.Time = date(2006, 11, 2)
+        Singleton.Today = date(2006, 11, 2)
         assert_log_level_info(self)
-        Singleton.Time = date(2006, 11, 3)
+        Singleton.Today = date(2006, 11, 3)
         assert_log_level_error(self)
 
 

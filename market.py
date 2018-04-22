@@ -6,56 +6,11 @@ MD5: f4f24493fd64a097fcbfb96d8e079243
 try: QCAlgorithm
 except NameError: from mocked import *
 
-import bisect
-from datetime import date
 from decimal import Decimal
 from decorators import accepts
+from algorithm_manager import Singleton
 
 # pylint: disable=C0111,C0103,C0112,E1136,R0903,R0913,R0914,R0902,R0911
-
-class Singleton(object):
-    ERROR = 0
-    INFO = 1
-    LOG = 2
-    DEBUG = 3
-
-    QCAlgorithm = None
-    Time = None
-    LogLevel = INFO
-    _log_level_dates = []
-
-
-    @classmethod
-    def Setup(cls, parent, log_level=INFO):
-        cls.Time = date(1, 1, 1)
-        cls.QCAlgorithm = parent
-        cls.LogLevel = log_level
-
-    @classmethod
-    def SetStartDateLogLevel(cls, log_level, year, month, day):
-        bisect.insort(cls._log_level_dates, (date(year, month, day), log_level))
-
-    @classmethod
-    def LogLevelPrintable(cls, log_level):
-        matched_log_level = cls.LogLevel
-        for elem in cls._log_level_dates:
-            if elem[0] <= cls.Time:
-                matched_log_level = elem[1]
-            else:
-                break
-        return log_level <= matched_log_level
-
-
-    @classmethod
-    def UpdateTime(cls):
-        if cls.Time != cls.QCAlgorithm.Time:
-            cls.Time = cls.QCAlgorithm.Time
-            cls.QCAlgorithm.Log(" - - - - {} - - - - ".format(cls.Time))
-
-    @classmethod
-    def CreateSymbol(cls, ticker):
-        return cls.QCAlgorithm.Securities[ticker].Symbol
-
 
 class ISymbolDict(dict):
     @accepts(self=object, key=(Symbol, str), value=object)
@@ -189,15 +144,15 @@ class Portfolio(ISymbolDict):
     def __init__(self, broker, cash=0.0, name=""):
         super(Portfolio, self).__init__()
         self.Name = name
-        self._initial_value = cash
+        self._initial_value = float(cash)
         self.Broker = broker
         self.Securities = Securities()
-        self.CashBook = cash
+        self.CashBook = float(cash)
         self.UnsettledCashBook = 0.0
-        self.Log = Singleton.QCAlgorithm.Log
-        self.Debug = Singleton.QCAlgorithm.Debug
-        self.Info = Singleton.QCAlgorithm.Info
-        self.Error = Singleton.QCAlgorithm.Error
+        self.Log = Singleton.Log
+        self.Debug = Singleton.Debug
+        self.Info = Singleton.Info
+        self.Error = Singleton.Error
 
     def SetupLog(self, algorithm):
         self.Broker.SetupLog(algorithm)
@@ -480,10 +435,10 @@ class Broker(object):
         self.Portfolio = Portfolio(broker=self, cash=0.0, name='Broker')
         self._to_submit = []
         self.submitted = {}
-        self.Log = Singleton.QCAlgorithm.Log
-        self.Debug = Singleton.QCAlgorithm.Debug
-        self.Info = Singleton.QCAlgorithm.Info
-        self.Error = Singleton.QCAlgorithm.Error
+        self.Log = Singleton.Log
+        self.Debug = Singleton.Debug
+        self.Info = Singleton.Info
+        self.Error = Singleton.Error
         if Singleton.QCAlgorithm.LiveMode:
             self._loadFromBroker()
 

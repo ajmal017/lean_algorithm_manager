@@ -1,11 +1,11 @@
 # pylint: disable=C0111,C0103,C0112,W0201,W0212
 import unittest
 
-from datetime import date
 from mocked import Resolution, Symbol, InternalSecurityManager
-from algorithm import Algorithm, SimpleAlgorithm
+from algorithm import Algorithm
 from market import Singleton, Broker, Position
 from algorithm_manager import AlgorithmManager as QCAlgorithm
+from algorithm_manager import Singleton
 
 FOO = Symbol('foo')
 BAR = Symbol('bar')
@@ -73,17 +73,17 @@ class TestMultipleAlgorithms(unittest.TestCase):
         self.algorithm1.SetWarmUp(123)
         self.algorithm2.SetWarmUp(321)
         # pylint: disable=E1101
-        self.assertEqual(self.qc._warm_up, 321)
+        self.assertEqual(Singleton._warm_up, 321)
 
     def test_qc_set_warmup_should_not_override_algorithm(self):
         self.algorithm1.SetWarmUp(123)
         self.algorithm2.SetWarmUp(321)
-        self.qc.SetWarmUp(444)
-        self.assertEqual(self.qc._warm_up, 321)
+        Singleton.SetWarmUp(444)
+        self.assertEqual(Singleton._warm_up, 321)
 
     def test_qc_set_warmup_from_main(self):
-        self.qc.SetWarmUp(444)
-        self.assertEqual(self.qc._warm_up, 444)
+        Singleton.SetWarmUp(444)
+        self.assertEqual(Singleton._warm_up, 444)
 
 
 class TestSimpleAlgorithm(unittest.TestCase):

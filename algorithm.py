@@ -2,12 +2,11 @@
 MD5: ba40d0da71d1fbebd2679eae3bbfa601
 """
 
-from datetime import timedelta
-
 # pylint: disable=C0321,C0103,W0613,R0201,R0913, R0904, C0111
 try: QCAlgorithm
 except NameError: from mocked import TradeBarConsolidator, OrderType, Symbol, QCAlgorithm
 
+from datetime import timedelta
 from algorithm_manager import Singleton
 from decorators import accepts, convert_to_symbol
 from market import Portfolio, InternalOrder, InternalSecurity, Securities
@@ -18,9 +17,6 @@ class SimpleAlgorithm(object):
         self.Name = name
         if initialize:
             self.Initialize()
-
-    def __str__(self):
-        return "[%s] %s" % (self.Name, str(self.Portfolio))
 
     def __getattr__(self, attr):
         """Delegate to parent."""
@@ -50,21 +46,24 @@ class SimpleAlgorithm(object):
     def SetStartDate(self, year, month, day): self.Debug("SetStartDate call ignored")
     def SetEndDate(self, year, month, day): self.Debug("SetStartDate call ignored")
     def SetWarmUp(self, period): Singleton.SetWarmUpFromAlgorithm(period)
-    def Log(self, message): Singleton.Log("LOG [%s] %s" % (self.Name, message))
-    def Debug(self, message): Singleton.Debug("DEBUG [%s] %s" % (self.Name, message))
-    def Info(self, message): Singleton.Info("INFO [%s] %s" %(self.Name, message))
-    def Error(self, message): Singleton.Error("ERROR [%s] %s" % (self.Name, message))
+    def Log(self, message): Singleton.Log("[%s] %s" % (self.Name, message))
+    def Debug(self, message): Singleton.Debug("[%s] %s" % (self.Name, message))
+    def Info(self, message): Singleton.Info("[%s] %s" %(self.Name, message))
+    def Error(self, message): Singleton.Error("[%s] %s" % (self.Name, message))
     def TryToFillOnOrderEvent(self, order_event): return True
 
 
 class Algorithm(SimpleAlgorithm):
     def __init__(self, broker, cash, name="anonymous", options={}):
-        super(Algorithm, self).__init__(cash=cash, name=name, initialize=False)
+        super().__init__(cash=cash, name=name, initialize=False)
         self.Options = options
         self.Securities = Securities()
-        self.Portfolio = Portfolio(broker=broker, cash=cash, name=name)
+        self.Portfolio = Portfolio(broker=broker, cash=cash)
         self.Portfolio.SetupLog(self)
         self.Initialize()
+
+    def __str__(self):
+        return "[%s] %s" % (self.Name, str(self.Portfolio))
 
     def post(self):
         self.Portfolio.Broker.executeOrders()
@@ -88,18 +87,15 @@ class Algorithm(SimpleAlgorithm):
             return True
         return False
 
-    def CreateRollingWindow(self, symbol, window_size):
-        rolling_window = RollingWindow[TradeBar](window_size)
-        consolidator = TradeBarConsolidator(timedelta(1))
-        consolidator.DataConsolidated += lambda _, bar: rolling_window.Add(bar)
-        self.SubscriptionManager.AddConsolidator(symbol, consolidator)
-        return rolling_window
-
-    ######################################################################
     @accepts(self=object, ticker=(str, Symbol), resolution=int)
     def AddEquity(self, ticker, resolution):
+        Singleton.Log("Algorithm.AddEquity({})".format(type(ticker)))
         equity = Singleton.AddEquity(ticker, resolution)
+        Singleton.Log("equity: {}".format(equity))
+        Singleton.Log("equity.Symbol: {}".format(equity.Symbol))
         self.Securities[equity.Symbol] = InternalSecurity(equity)
+        Singleton.Log("SPY: {}".format(Singleton.Securities[ticker]))
+        Singleton.Log("SPY: {}".format(self.Securities[ticker]))
         return equity
 
     @accepts(self=object, security_type=int, ticker=(str, Symbol), resolution=int)
@@ -171,3 +167,11 @@ class Algorithm(SimpleAlgorithm):
         else:
             self.Debug("Liquidate(%s)" % symbol)
         self.Portfolio.Liquidate(symbol=symbol, tag=self._tag(tag))
+
+    ######################################################################
+    def CreateRollingWindow(self, symbol, window_size):
+        rolling_window = RollingWindow[TradeBar](window_size)
+        consolidator = TradeBarConsolidator(timedelta(1))
+        consolidator.DataConsolidated += lambda _, bar: rolling_window.Add(bar)
+        self.SubscriptionManager.AddConsolidator(symbol, consolidator)
+        return rolling_window

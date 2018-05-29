@@ -64,23 +64,23 @@ class Singleton(metaclass=SingletonMeta):
     def Log(cls, message):
         if cls._can_log(cls.LOG):
             cls._update_time()
-            cls.QCAlgorithm.Log(message)
+            cls.QCAlgorithm.Log("L " + message)
 
     @classmethod
     def Debug(cls, message):
         if cls._can_log(cls.DEBUG):
-            cls.QCAlgorithm.Log(message)
+            cls.QCAlgorithm.Log("D " + message)
 
     @classmethod
     def Info(cls, message):
         if cls._can_log(cls.INFO):
-            cls.QCAlgorithm.Log(message)
+            cls.QCAlgorithm.Log("I " + message)
             cls.QCAlgorithm.Debug(message)
 
     @classmethod
     def Error(cls, message):
         if cls._can_log(cls.ERROR):
-            cls.QCAlgorithm.Error(message)
+            cls.QCAlgorithm.Error("E " + message)
 
     @classmethod
     def CreateSymbol(cls, ticker):
@@ -111,8 +111,13 @@ class AlgorithmManager(QCAlgorithm):
         self._benchmarks = benchmarks
 
         plot = Chart('Performance')
+        count = 1
         for i in algorithms + benchmarks:
+            for base in i.__class__.__bases__:
+                Singleton.Info("{}: {}".format(i.__class__.__name__, base.__name__))
+            Singleton.Info("{}: plot.AddSeries({})".format(count, i.Name))
             plot.AddSeries(Series(i.Name, SeriesType.Line, 0, '%'))
+            count += 1
         self.AddChart(plot)
 
     def pre(self):
@@ -135,7 +140,6 @@ class AlgorithmManager(QCAlgorithm):
         return symbols
 
     def OnData(self, data):
-        if self.IsWarmingUp: return
         # Singleton.Debug("OnData")
         self.pre()
         for alg in self._algorithms:
@@ -143,7 +147,6 @@ class AlgorithmManager(QCAlgorithm):
         self.post()
 
     def OnDividend(self):
-        if self.IsWarmingUp: return
         Singleton.Debug("OnDividend")
         self.pre()
         for alg in self._algorithms:
@@ -151,7 +154,6 @@ class AlgorithmManager(QCAlgorithm):
         self.post()
 
     def OnSecuritiesChanged(self, changes):
-        if self.IsWarmingUp: return
         Singleton.Debug("OnSecuritiesChanged {0}".format(changes))
         self.pre()
         for alg in self._algorithms:
@@ -160,10 +162,7 @@ class AlgorithmManager(QCAlgorithm):
         self.post()
 
     def OnEndOfDay(self):
-        if self.IsWarmingUp: return
-        # Singleton.Debug("OnEndOfDay")
-        if Singleton.Today.month == 1 and Singleton.Today.day == 1:
-            self.Debug("HAPPY NEW YEAR")
+        Singleton.Log("OnEndOfDay: {}".format(Singleton.Time))
         self.pre()
         for alg in self._algorithms:
             alg.OnEndOfDay()
@@ -172,7 +171,6 @@ class AlgorithmManager(QCAlgorithm):
             self.Plot('Performance', i.Name, i.Performance)
 
     def OnEndOfAlgorithm(self):
-        Singleton.Debug("OnEndOfAlgorithm")
         self.pre()
         for alg in self._algorithms:
             alg.OnEndOfAlgorithm()

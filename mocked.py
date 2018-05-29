@@ -86,7 +86,7 @@ class Security(object):
 
 class InternalSecurityManager(dict):
     def __init__(self, securities=[]):
-        super(InternalSecurityManager, self).__init__()
+        super().__init__()
         for ticker, price in securities:
             self[ticker] = Security(ticker, price)
 
@@ -94,7 +94,7 @@ class InternalSecurityManager(dict):
     def __setitem__(self, key, value):
         if isinstance(key, str):
             key = self.createKey(key)
-        return super(InternalSecurityManager, self).__setitem__(key, value)
+        return super().__setitem__(key, value)
 
     @accepts(self=object, key=(Symbol, str))
     def __getitem__(self, key):
@@ -102,7 +102,7 @@ class InternalSecurityManager(dict):
             key = self.createKey(key)
         if key not in self:
             return self.NoValue(key)
-        return super(InternalSecurityManager, self).__getitem__(key)
+        return super().__getitem__(key)
 
     def createKey(self, key):
         return Symbol.Create(key, SecurityType.Equity, Market.USA)

@@ -3,7 +3,7 @@ import unittest
 
 from mocked import Resolution, Symbol, InternalSecurityManager
 from algorithm import Algorithm
-from market import Singleton, Broker, Position
+from market import Broker, Position
 from algorithm_manager import AlgorithmManager as QCAlgorithm
 from algorithm_manager import Singleton
 
@@ -12,9 +12,6 @@ BAR = Symbol('bar')
 XYZ = Symbol('xyz')
 
 class Algorithm1(Algorithm):
-    def __init__(self, broker, cash, name="alg1"):
-        super(Algorithm1, self).__init__(broker=broker, cash=cash, name=name)
-
     def Initialize(self):
         self.SetCash(100000)
         self.stock = self.AddEquity(FOO, Resolution.Daily).Symbol

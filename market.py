@@ -15,17 +15,24 @@ from algorithm_manager import Singleton
 class ISymbolDict(dict):
     @accepts(self=object, key=(Symbol, str), value=object)
     def __setitem__(self, key, value):
-        key = self.createKey(key)
-        return super(ISymbolDict, self).__setitem__(key, value)
+        key = ISymbolDict.createKey(key)
+        return super().__setitem__(key, value)
+
+    def __str__(self):
+        items = []
+        for k, v in iter(super().items()):
+            items.append('{}: {}; '.format(k, v))
+        return '{ ' + ', '.join(items) + ' }'
 
     @accepts(self=object, key=(Symbol, str))
     def __getitem__(self, key):
-        key = self.createKey(key)
+        key = ISymbolDict.createKey(key)
         if key not in self:
             return self.NoValue(key)
-        return super(ISymbolDict, self).__getitem__(key)
+        return super().__getitem__(key)
 
-    def createKey(self, key):
+    @classmethod
+    def createKey(cls, key):
         if isinstance(key, Symbol):
             return key
         elif isinstance(key, str):
@@ -45,13 +52,13 @@ class InternalSecurity(object):
     '''Security'''
     @accepts(self=object, security=Security)
     def __init__(self, security):
-        self._parent = security
+        self._internal = security
         self.Holdings = None
 
     def __getattr__(self, attr):
         """Delegate to parent."""
-        if hasattr(self._parent, attr):
-            return getattr(self._parent, attr)
+        if hasattr(self._internal, attr):
+            return getattr(self._internal, attr)
         else:
             raise AttributeError(attr)
 
@@ -72,10 +79,11 @@ class Securities(ISymbolDict):
     '''InternalSecurityManager'''
     @accepts(self=object, key=(Symbol, str), value=InternalSecurity)
     def __setitem__(self, key, value):
-        return super(Securities, self).__setitem__(key, value)
+        return super().__setitem__(key, value)
 
     @accepts(self=object, security=Security)
     def Add(self, security):
+        Singleton.Log("Securities.Add({})".format(type(security)))
         if security.Symbol not in self:
             self[security.Symbol] = InternalSecurity(security)
 
@@ -141,9 +149,8 @@ class Position(object):
 
 class Portfolio(ISymbolDict):
     '''SecurityPortfolioManager'''
-    def __init__(self, broker, cash=0.0, name=""):
-        super(Portfolio, self).__init__()
-        self.Name = name
+    def __init__(self, broker, cash=0.0):
+        super().__init__()
         self._initial_value = float(cash)
         self.Broker = broker
         self.Securities = Securities()
@@ -155,7 +162,6 @@ class Portfolio(ISymbolDict):
         self.Error = Singleton.Error
 
     def SetupLog(self, algorithm):
-        self.Broker.SetupLog(algorithm)
         self.Log = algorithm.Log
         self.Debug = algorithm.Debug
         self.Info = algorithm.Info
@@ -432,7 +438,7 @@ class InternalOrder(object):
 
 class Broker(object):
     def __init__(self):
-        self.Portfolio = Portfolio(broker=self, cash=0.0, name='Broker')
+        self.Portfolio = Portfolio(broker=self, cash=0.0)
         self._to_submit = []
         self.submitted = {}
         self.Log = Singleton.Log
@@ -441,12 +447,6 @@ class Broker(object):
         self.Error = Singleton.Error
         if Singleton.QCAlgorithm.LiveMode:
             self._loadFromBroker()
-
-    def SetupLog(self, algorithm):
-        self.Log = algorithm.Log
-        self.Debug = algorithm.Debug
-        self.Info = algorithm.Info
-        self.Error = algorithm.Error
 
     def __str__(self):
         return "To Submit: %s; Submitted: %s" % (self._to_submit, self.submitted)
@@ -472,7 +472,7 @@ class Broker(object):
         virtual_funds = sum(x.Portfolio.TotalPortfolioValue for x in Singleton.QCAlgorithm.algorithms)
         if virtual_funds > real_funds:
             message = "Insufficient funds in real portfolio ($%.2f) \
-                      to support running algorithms ($%.2f)." % (real_funds, virtual_funds)
+                      to support running algorithms ($%.2f)."                                                                                                                           % (real_funds, virtual_funds)
             self.Debug("EXCEPTION: %s" % message)
             raise Exception(message)
 

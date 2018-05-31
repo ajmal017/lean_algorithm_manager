@@ -372,8 +372,8 @@ class Portfolio(ISymbolDict):
 
 
 class BenchmarkSymbol(object):
-    def __init__(self, ticker):
-        self.Name = ticker
+    def __init__(self, ticker, name=None):
+        self.Name = name or ticker
         self._symbol = Singleton.QCAlgorithm.AddEquity(ticker, Resolution.Daily).Symbol
         self._cost = 0
 
@@ -383,7 +383,7 @@ class BenchmarkSymbol(object):
             self._cost = float(Singleton.QCAlgorithm.Securities[self._symbol.Value].Price)
         price = float(Singleton.QCAlgorithm.Securities[self._symbol.Value].Price)
         if price == 0 or self._cost == 0:
-            return 100.0
+            return 0.0
         return 100.0 * ((price / self._cost) - 1.0)
 
 

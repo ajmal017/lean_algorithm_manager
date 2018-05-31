@@ -111,13 +111,8 @@ class AlgorithmManager(QCAlgorithm):
         self._benchmarks = benchmarks
 
         plot = Chart('Performance')
-        count = 1
         for i in algorithms + benchmarks:
-            for base in i.__class__.__bases__:
-                Singleton.Info("{}: {}".format(i.__class__.__name__, base.__name__))
-            Singleton.Info("{}: plot.AddSeries({})".format(count, i.Name))
             plot.AddSeries(Series(i.Name, SeriesType.Line, 0, '%'))
-            count += 1
         self.AddChart(plot)
 
     def pre(self):

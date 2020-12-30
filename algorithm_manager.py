@@ -75,7 +75,6 @@ class Singleton(metaclass=SingletonMeta):
     def Info(cls, message):
         if cls._can_log(cls.INFO):
             cls.QCAlgorithm.Log("I " + message)
-            cls.QCAlgorithm.Debug(message)
 
     @classmethod
     def Error(cls, message):
@@ -111,7 +110,7 @@ class AlgorithmManager(QCAlgorithm):
         self._benchmarks = benchmarks
 
         plot = Chart('Performance')
-        for i in algorithms + benchmarks:
+        for i in benchmarks + algorithms:
             plot.AddSeries(Series(i.Name, SeriesType.Line, 0, '%'))
         self.AddChart(plot)
 

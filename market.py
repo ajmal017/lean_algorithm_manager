@@ -228,7 +228,7 @@ class Portfolio(ISymbolDict):
             self.Debug("{0}FILLED: {1} at FILL PRICE: {2}".format(prefix, order_event, order_event.FillPrice))
             self.Debug("Before: {}".format(self[order.Symbol].Quantity))
             self.FillOrder(order.Symbol, float(order_event.FillQuantity),
-                           float(order_event.FillPrice), float(order_event.OrderFee))
+                           float(order_event.FillPrice), float(order_event.OrderFee.Value.Amount))
             self.Debug("After: {}".format(self[order.Symbol].Quantity))
 
         else:

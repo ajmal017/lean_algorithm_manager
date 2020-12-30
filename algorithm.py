@@ -89,13 +89,8 @@ class Algorithm(SimpleAlgorithm):
 
     @accepts(self=object, ticker=(str, Symbol), resolution=int)
     def AddEquity(self, ticker, resolution):
-        Singleton.Log("Algorithm.AddEquity({})".format(type(ticker)))
         equity = Singleton.AddEquity(ticker, resolution)
-        Singleton.Log("equity: {}".format(equity))
-        Singleton.Log("equity.Symbol: {}".format(equity.Symbol))
         self.Securities[equity.Symbol] = InternalSecurity(equity)
-        Singleton.Log("SPY: {}".format(Singleton.Securities[ticker]))
-        Singleton.Log("SPY: {}".format(self.Securities[ticker]))
         return equity
 
     @accepts(self=object, security_type=int, ticker=(str, Symbol), resolution=int)

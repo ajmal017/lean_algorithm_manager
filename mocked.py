@@ -22,6 +22,7 @@ class SubscriptionManager(object):
 
 class Market(object):
     USA = 1
+    GDAX = 2
 
 class SecurityType(object):
     Equity = 1
@@ -235,13 +236,31 @@ class OrderTicket(object):
     def Cancel(self, tag=""):
         pass
 
+
+class Amount(object):
+    def __init__(self, amount):
+        self.amount = amount
+
+    @property
+    def Amount(self):
+        return self.amount
+
+class Value(object):
+    def __init__(self, amount):
+        self.value = Amount(amount)
+
+    @property
+    def Value(self):
+        return self.value
+
+
 class OrderEvent(object):
     def __init__(self, order_id, symbol, quantity, price=None, status=OrderStatus.New):
         self.OrderId = order_id
         self.Symbol = symbol
         self.Quantity = quantity
         self.Status = status
-        self.OrderFee = 0
+        self.OrderFee = Value(0)
         self.FillPrice = 0
         self.FillQuantity = 0
         if price:
@@ -323,7 +342,6 @@ class QCAlgorithm(object):
     def OnOrderEvent(self, order_event): pass
     def Log(self, message): print(message)
     def Debug(self, message): print(message)
-    def Info(self, message): print(message)
     def Error(self, message): print(message)
     def AddChart(self, plot): pass
     def Plot(self, chart_name, series_name, value): pass

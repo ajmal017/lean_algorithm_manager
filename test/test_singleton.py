@@ -8,25 +8,16 @@ from algorithm_manager import AlgorithmManager as QCAlgorithm
 
 def assert_log_level_error(test):
     test.assertEqual(Singleton._can_log(Singleton.ERROR), True)
-    test.assertEqual(Singleton._can_log(Singleton.INFO), False)
-    test.assertEqual(Singleton._can_log(Singleton.LOG), False)
-    test.assertEqual(Singleton._can_log(Singleton.DEBUG), False)
-
-def assert_log_level_info(test):
-    test.assertEqual(Singleton._can_log(Singleton.ERROR), True)
-    test.assertEqual(Singleton._can_log(Singleton.INFO), True)
     test.assertEqual(Singleton._can_log(Singleton.LOG), False)
     test.assertEqual(Singleton._can_log(Singleton.DEBUG), False)
 
 def assert_log_level_log(test):
     test.assertEqual(Singleton._can_log(Singleton.ERROR), True)
-    test.assertEqual(Singleton._can_log(Singleton.INFO), True)
     test.assertEqual(Singleton._can_log(Singleton.LOG), True)
     test.assertEqual(Singleton._can_log(Singleton.DEBUG), False)
 
 def assert_log_level_debug(test):
     test.assertEqual(Singleton._can_log(Singleton.ERROR), True)
-    test.assertEqual(Singleton._can_log(Singleton.INFO), True)
     test.assertEqual(Singleton._can_log(Singleton.LOG), True)
     test.assertEqual(Singleton._can_log(Singleton.DEBUG), True)
 
@@ -34,15 +25,11 @@ def assert_log_level_debug(test):
 class TestSingletonLogLevel(unittest.TestCase):
     def setUp(self):
         self.qc = QCAlgorithm()
-        Singleton.Setup(self.qc, log_level=Singleton.INFO)
+        Singleton.Setup(self.qc, log_level=Singleton.LOG)
 
     def test_log_level_printable_error(self):
         Singleton.LogLevel = Singleton.ERROR
         assert_log_level_error(self)
-
-    def test_log_level_printable_info(self):
-        Singleton.LogLevel = Singleton.INFO
-        assert_log_level_info(self)
 
     def test_log_level_printable_log(self):
         Singleton.LogLevel = Singleton.LOG
@@ -56,31 +43,27 @@ class TestSingletonLogLevel(unittest.TestCase):
 class TestSingletonLogLevelWithCustomDateRanges(unittest.TestCase):
     def setUp(self):
         self.qc = QCAlgorithm()
-        Singleton.Setup(self.qc, log_level=Singleton.INFO)
+        Singleton.Setup(self.qc, log_level=Singleton.LOG)
 
     @classmethod
     def setUpClass(cls):
         Singleton.SetStartDateLogLevel(Singleton.LOG, 2005, 5, 1)
-        Singleton.SetStartDateLogLevel(Singleton.INFO, 2006, 10, 31)
         Singleton.SetStartDateLogLevel(Singleton.ERROR, 2006, 11, 3)
         Singleton.SetStartDateLogLevel(Singleton.LOG, 2007, 5, 1)
         Singleton.SetStartDateLogLevel(Singleton.DEBUG, 2008, 10, 31)
 
     def test_dates_setup(self):
-        assert_log_level_info(self)
+        assert_log_level_log(self)
 
     def test_dates_simple(self):
         Singleton.Today = date(2004, 10, 25)
-        assert_log_level_info(self)
+        assert_log_level_log(self)
 
         Singleton.Today = date(2005, 10, 25)
         assert_log_level_log(self)
 
         Singleton.Today = date(2005, 11, 25)
         assert_log_level_log(self)
-
-        Singleton.Today = date(2006, 11, 1)
-        assert_log_level_info(self)
 
         Singleton.Today = date(2006, 11, 4)
         assert_log_level_error(self)
@@ -98,7 +81,7 @@ class TestSingletonLogLevelWithCustomDateRanges(unittest.TestCase):
         assert_log_level_log(self)
 
         Singleton.Today = date(2006, 11, 2)
-        assert_log_level_info(self)
+        assert_log_level_log(self)
         Singleton.Today = date(2006, 11, 3)
         assert_log_level_error(self)
 

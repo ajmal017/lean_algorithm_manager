@@ -48,7 +48,6 @@ class SimpleAlgorithm(object):
     def SetWarmUp(self, period): Singleton.SetWarmUpFromAlgorithm(period)
     def Log(self, message): Singleton.Log("[%s] %s" % (self.Name, message))
     def Debug(self, message): Singleton.Debug("[%s] %s" % (self.Name, message))
-    def Info(self, message): Singleton.Info("[%s] %s" %(self.Name, message))
     def Error(self, message): Singleton.Error("[%s] %s" % (self.Name, message))
     def TryToFillOnOrderEvent(self, order_event): return True
 

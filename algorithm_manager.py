@@ -21,19 +21,18 @@ class SingletonMeta(type):
 
 class Singleton(metaclass=SingletonMeta):
     ERROR = 0
-    INFO = 1
-    LOG = 2
-    DEBUG = 3
+    LOG = 1
+    DEBUG = 2
 
     Today = date(1, 1, 1)
     QCAlgorithm = None
-    LogLevel = INFO
+    LogLevel = LOG
     _log_level_dates = []
     _warm_up = None
     _warm_up_from_algorithm = False
 
     @classmethod
-    def Setup(cls, parent, log_level=INFO):
+    def Setup(cls, parent, log_level=LOG):
         cls.Today = date(1, 1, 1)
         cls.QCAlgorithm = parent
         cls.LogLevel = log_level
@@ -44,7 +43,7 @@ class Singleton(metaclass=SingletonMeta):
     def _update_time(cls):
         if cls.Today != cls.QCAlgorithm.Time.date():
             cls.Today = cls.QCAlgorithm.Time.date()
-            cls.QCAlgorithm.Log(" - - - - {} - - - - ".format(cls.Today))
+            cls.QCAlgorithm.Debug(" - - - - {} - - - - ".format(cls.Today))
 
     @classmethod
     def SetStartDateLogLevel(cls, log_level, year, month, day):
@@ -70,11 +69,6 @@ class Singleton(metaclass=SingletonMeta):
     def Debug(cls, message):
         if cls._can_log(cls.DEBUG):
             cls.QCAlgorithm.Log("D " + message)
-
-    @classmethod
-    def Info(cls, message):
-        if cls._can_log(cls.INFO):
-            cls.QCAlgorithm.Log("I " + message)
 
     @classmethod
     def Error(cls, message):
@@ -156,7 +150,7 @@ class AlgorithmManager(QCAlgorithm):
         self.post()
 
     def OnEndOfDay(self):
-        Singleton.Log("OnEndOfDay: {}".format(Singleton.Time))
+        # Singleton.Debug("OnEndOfDay: {}".format(Singleton.Time))
         self.pre()
         for alg in self._algorithms:
             alg.OnEndOfDay()

@@ -1,118 +1,93 @@
-"""
-MD5: a1542f0bdfe75aa0300683c1fb1a7076
-"""
-
 # pylint: disable=C0321,W0401,W0614
 try: QCAlgorithm
 except NameError: from mocked import *
 
 from decimal import Decimal
-from decorators import accepts
-from algorithm_manager import Singleton
+from datetime import date
+from math import isclose
+from decorators import accepts, convert_to_symbol
+from singleton import Singleton
 
 # pylint: disable=C0111,C0103,C0112,E1136,R0903,R0913,R0914,R0902,R0911
 
+
+class Helper:
+    @classmethod
+    def is_order_done(cls, event_order_status):
+        if event_order_status in (
+            OrderStatus.New,
+            OrderStatus.Submitted,
+            OrderStatus.CancelPending,
+            OrderStatus.UpdateSubmitted
+        ):
+            return False
+        else:
+            return True
+
 class ISymbolDict(dict):
+    # def __iter__(self):
+    #     return super().items().__iter__()
+
     @accepts(self=object, key=(Symbol, str), value=object)
     def __setitem__(self, key, value):
-        key = ISymbolDict.createKey(key)
+        key = ISymbolDict.CreateSymbol(key)
         return super().__setitem__(key, value)
-
-    def __str__(self):
-        items = []
-        for k, v in iter(super().items()):
-            items.append('{}: {}; '.format(k, v))
-        return '{ ' + ', '.join(items) + ' }'
 
     @accepts(self=object, key=(Symbol, str))
     def __getitem__(self, key):
-        key = ISymbolDict.createKey(key)
+        key = ISymbolDict.CreateSymbol(key)
         if key not in self:
             return self.NoValue(key)
         return super().__getitem__(key)
 
     @classmethod
-    def createKey(cls, key):
+    def CreateSymbol(cls, key):
         if isinstance(key, Symbol):
             return key
         elif isinstance(key, str):
-            try:
-                return Singleton.QCAlgorithm.Securities[key].Symbol
-            except KeyError:
-                return key
-            # return Symbol.Create(key, SecurityType.Equity, Market.USA)
+            return Singleton.QCAlgorithm.Securities[key].Symbol
         else:
             raise TypeError("Expected str or Symbol, but got {}".format(key))
 
     def NoValue(self, key):
         raise KeyError("Could not find key \"{}\"".format(key))
 
-
-class InternalSecurity(object):
-    '''Security'''
-    @accepts(self=object, security=Security)
-    def __init__(self, security):
-        self._internal = security
-        self.Holdings = None
-
-    def __getattr__(self, attr):
-        """Delegate to parent."""
-        if hasattr(self._internal, attr):
-            return getattr(self._internal, attr)
-        else:
-            raise AttributeError(attr)
-
-    def SetHoldings(self, position):
-        self.Holdings = position
-        raise NotImplementedError("Did not implement SetHoldings")
+    @property
+    def Keys(self):
+        return self.keys()
 
     @property
-    def HoldStock(self):
-        return self.Holdings.HoldStock
-
-    @property
-    def Invested(self):
-        return self.HoldStock
-
-
-class Securities(ISymbolDict):
-    '''InternalSecurityManager'''
-    @accepts(self=object, key=(Symbol, str), value=InternalSecurity)
-    def __setitem__(self, key, value):
-        return super().__setitem__(key, value)
-
-    @accepts(self=object, security=Security)
-    def Add(self, security):
-        Singleton.Log("Securities.Add({})".format(type(security)))
-        if security.Symbol not in self:
-            self[security.Symbol] = InternalSecurity(security)
+    def Values(self):
+        return self.values()
 
 
 class Position(object):
     '''SecurityHolding'''
 
-    def __init__(self, symbol, quantity, price_per_share):
+    @accepts(self=object, symbol=Symbol, quantity=(int, float), price_per_share=(int, float), fees=(int, float))
+    def __init__(self, symbol, quantity, price_per_share, fees=0):
         self.Symbol = symbol
         self.Quantity = float(quantity)
         self.AveragePrice = float(price_per_share)
-        self.TotalSaleVolume = 0.0
-        self.Profit = 0.0
-        self.LastTradeProfit = 0.0
-        self.TotalFees = 0.0
+        self.TotalFees = float(fees)
         self.Security = None
+        if symbol in Singleton.QCAlgorithm.Securities:
+            self.Security = Singleton.QCAlgorithm.Securities[symbol]
+
 
     def __str__(self):
-        return "symbol: %s, qty: %.1f, cost: $%.2f" % (self.Symbol, self.Quantity, self.HoldingsCost())
+        return "(%.1f %s @ %.2f USD + $%.2f)" % (self.Quantity, self.Symbol, self.HoldingsCost(), self.TotalFees)
 
     def __repr__(self):
-        return self.__str__()
-
-    def HoldingsCost(self):
-        return self.Quantity * self.AveragePrice
+        return f"{self.Symbol}: {self.Quantity}"
 
     @property
     def AbsoluteQuantity(self):
-        return int(self.Quantity)
+        return abs(self.Quantity)
+
+
+    def HoldingsCost(self):
+        return self.Quantity * self.AveragePrice
 
     @property
     def HoldStock(self):
@@ -123,80 +98,111 @@ class Position(object):
         return self.HoldStock
 
     @property
-    def NetProfit(self):
-        return self.Profit - self.TotalFees
+    def IsLong(self):
+        return self.Quantity > 0.0
+
+    @property
+    def IsShort(self):
+        return self.Quantity < 0.0
+
+    # @property
+    # def NetProfit(self):
+    #     return self.Profit - self.TotalFees
 
     @property
     def Price(self):
         return self.Security.Price
 
-    def Fill(self, quantity, price_per_share=None):
+    @accepts(self=object, quantity=float, price_per_share=float, fees=float)
+    def _fill(self, quantity, price_per_share=None, fees=0.0):
         if quantity == 0:
             return
+
+        if quantity > 0:
+            old_sum = self.Quantity * self.AveragePrice
+            new_sum = quantity * price_per_share
+            self.Quantity += quantity
+            self.AveragePrice = (old_sum + new_sum) / self.Quantity
+
         elif quantity < 0:
-            price_per_share = self.AveragePrice
+            self.Quantity += quantity
 
-        denominator = self.Quantity + quantity
-        if denominator == 0:
-            self.AveragePrice = 0
-            self.Quantity = 0
-            return
-        old_sum = self.Quantity * self.AveragePrice
-        new_sum = (old_sum + quantity * price_per_share)
-        self.AveragePrice = new_sum / denominator
-        self.Quantity += quantity
+        self.TotalFees += fees
 
 
-class Portfolio(ISymbolDict):
-    '''SecurityPortfolioManager'''
-    def __init__(self, broker, cash=0.0):
-        super().__init__()
-        self._initial_value = float(cash)
-        self.Broker = broker
-        self.Securities = Securities()
-        self.CashBook = float(cash)
-        self.UnsettledCashBook = 0.0
-        self.Log = Singleton.Log
-        self.Debug = Singleton.Debug
-        self.Error = Singleton.Error
-
-    def SetupLog(self, algorithm):
-        self.Log = algorithm.Log
-        self.Debug = algorithm.Debug
-        self.Error = algorithm.Error
-
-    def NoValue(self, key):
-        return Position(key, 0, 0.0)
-
+class CashAmount(float):
     @property
-    def Transactions(self):
-        raise NotImplementedError("Did not implement Transactions")
-        # return Singleton.QCAlgorithm.Transactions
+    def Amount(self):
+        return self
 
-    @property
-    def HoldStock(self):
-        return self.TotalHoldingsValue > 0.0
 
-    @property
-    def Invested(self):
-        return self.HoldStock
+class Cash(CashAmount):
+    def __new__(cls, currency_symbol, amount, price=1.0):
+        return super().__new__(cls, amount)
 
+    def __init__(self, currency_symbol, amount, price=1.0):
+        CashAmount.__init__(amount)
+        self.CurrencySymbol = currency_symbol
+        self.ConversionRate = price
+
+
+class CashBook(dict):
     @property
     def Keys(self):
         return self.keys()
 
+
+
+class Portfolio(ISymbolDict):
+    '''SecurityPortfolioManager'''
+    def __init__(self, algorithm=None, cash=0.0):
+        super().__init__()
+        self.Algorithm = algorithm
+        self.__orders = []
+        self.__cost = cash
+        self.Cash = Cash('USD', cash)
+        self.CashBook = CashBook()
+        self.CashBook['USD'] = Cash('USD', cash)
+        self.UnsettledCash = 0.0
+
+    def __bool__(self):
+        return True
+
+    def NoValue(self, key):
+        return Position(key, 0, 0)
+
+    def SetCost(self, cost):
+        self.__cost = cost
+
+    def SetCash(self, cash):
+        self.Cash = Cash('USD', cash)
+        self.CashBook['USD'] = Cash('USD', cash)
+        self.SetCost(cash)
+
+    @property
+    def HoldStock(self):
+        return self.TotalHoldingsValue > 0
+
+    @property
+    def Invested(self):
+        for pos in self.values():
+            if pos.Quantity > 0:
+                return True
+        return False
+
     @property
     def TotalPortfolioValue(self):
-        return self.TotalHoldingsValue + self.CashBook - self.TotalFees
+        return self.TotalHoldingsValue + self.Cash + self.UnsettledCash
 
     @property
     def TotalHoldingsValue(self):
-        return sum([pos.Quantity * float(Singleton.QCAlgorithm.Securities[symb].Price)
-                    for symb, pos in iter(self.items())])
+        retval = sum([(pos.Quantity) * Singleton.QCAlgorithm.Securities[symb].Price
+                      for symb, pos in iter(self.items())])
+        return float(retval)
 
     @property
     def TotalHoldingsCost(self):
-        return sum([pos.Quantity * pos.AveragePrice for _symb, pos in iter(self.items())])
+        return sum([pos.Quantity * pos.AveragePrice for pos in iter(self.values())])
 
     @property
     def UnrealizedProfit(self):
@@ -204,204 +210,129 @@ class Portfolio(ISymbolDict):
 
     @property
     def Performance(self):
-        return 100.0 * ((self.TotalPortfolioValue / self._initial_value) - 1.0)
+        if self.__cost == 0:
+            return 0.0
+        return round(100.0 * ((self.TotalPortfolioValue / self.__cost) - 1.0), 2)
 
-    @property
-    def TotalProfit(self):
-        return sum([pos.Profit for pos in self.values()])
+    # @property
+    # def TotalProfit(self):
+    #     return sum([pos.Profit for pos in self.values()])
 
     @property
     def TotalFees(self):
-        return sum([pos.TotalFees for pos in self.values()])
+        retval = sum([pos.TotalFees for pos in self.values()])
+        return retval
 
     def __str__(self):
-        return 'Portfolio([' + '), ('.join(map(str, self.values())) + '])'
+        return Portfolio.ToString(self)
 
     def __repr__(self):
-        return self.__str__()
+        return "{" + ", ".join(map(repr, self.values())) + "}"
 
-    # @accepts(self=object, order_event=OrderEvent, order=object)
-    def ProcessOrderEvent(self, order_event, order):
-        if order_event.Status == OrderStatus.Invalid:
-            self.Debug("INVALID: {0}".format(order_event))
+    @classmethod
+    def ToString(cls, portfolio):
+        positions = [f"({symb.Value}, {pos.Quantity})" for symb, pos in portfolio.items()]
+        text_positions = (", ".join(positions))
+        return \
+            f"[{text_positions}], " \
+            f"TotalHoldingsValue: {round(portfolio.TotalHoldingsValue, 2)}, " \
+            f"Cash: {round(portfolio.Cash, 2)}, " \
+            f"UnsettledCash: {round(portfolio.UnsettledCash, 2)}, " \
+            f"TotalFees: {round(portfolio.TotalFees, 2)}"
 
-        elif order_event.Status in [OrderStatus.Filled, OrderStatus.PartiallyFilled]:
-            prefix = "PARTIALLY " if order_event.Status == OrderStatus.PartiallyFilled else ""
-            self.Debug("{0}FILLED: {1} at FILL PRICE: {2}".format(prefix, order_event, order_event.FillPrice))
-            self.Debug("Before: {}".format(self[order.Symbol].Quantity))
-            self.FillOrder(order.Symbol, float(order_event.FillQuantity),
-                           float(order_event.FillPrice), float(order_event.OrderFee.Value.Amount))
-            self.Debug("After: {}".format(self[order.Symbol].Quantity))
+    @accepts(self=object, order_event=OrderEvent, order=object)
+    def ProcessFill(self, order_event, order):
+        Singleton.Debug("> ProcessFill: %s" % order_event)
+        self._fill_order(order.Symbol, order_event.FillQuantity, order_event.FillPrice, order_event.OrderFee.Value.Amount)
 
-        else:
-            self.Debug("????: {0} at FILL PRICE: {1}".format(order_event, order_event.FillPrice))
-
-
-    # @accepts(self=object, symbol=Symbol, quantity=(int, float), price_per_share=(float), fees=(float))
-    def FillOrder(self, symbol, quantity, price_per_share, fees=0.0):
+    @accepts(self=object, symbol=Symbol, quantity=float, price_per_share=float, fees=float)
+    def _fill_order(self, symbol, quantity, price_per_share, fees=0.0):
         """Used by Broker."""
         if symbol not in self:
-            self[symbol] = Position(symbol, quantity, price_per_share)
+            self[symbol] = Position(symbol, quantity, price_per_share, fees)
         else:
-            self[symbol].Fill(quantity, price_per_share)
+            self[symbol]._fill(quantity, price_per_share, fees)
+        self.Cash -= quantity * price_per_share
+        self.Cash -= fees
+        self.CashBook['USD'] = self.Cash
 
-        self.CashBook -= quantity * price_per_share
-        self[symbol].TotalFees += fees
-
-        remaining_quantity = self[symbol].Quantity
+        # We round the float to prevent negative near-zero
+        remaining_quantity = round(self[symbol].Quantity, 6)
         if remaining_quantity < 0:
-            message = "InternalOrder removed too many positions of %s" % symbol
-            self.Debug("EXCEPTION: %s" % message)
+            message = "Negative positions of %s (%f)" % (symbol, remaining_quantity)
             raise Exception(message)
-        elif remaining_quantity == 0:
-            self.pop(symbol)
 
     # @accepts(self=object, order=InternalOrder)
     def AddOrder(self, order):
-        self.Debug("Adding Order {}".format(order))
-        if order.Quantity == 0:
-            self.Debug("Warning: Avoiding submitting order that has zero quantity.")
+        Singleton.Debug(f"Portfolio.AddOrder: {order}")
+        Singleton.Log(f"Order size: {order.Quantity}")
+        Singleton.Log(f"isclose({order.Quantity}, 0, abs_tol={Singleton.Securities[order.Symbol].SymbolProperties.LotSize})")
+        if isclose(order.Quantity, 0, abs_tol=Singleton.Securities[order.Symbol].SymbolProperties.LotSize):
+            Singleton.Log("Warning: Avoiding submitting order that has zero quantity.")
             return
-        self.Broker.AddOrder(order)
-        self.Debug("Added Order")
+        Singleton.Debug(f"AddOrder: {order}")
+        self.__orders.append(order)
 
+    def ExecuteOrders(self):
+        sorted_orders = sorted(self.__orders, key=lambda x: x.Quantity)
+        for order in sorted_orders:
+            Singleton.Broker.ExecuteOrder(order)
+        self.__orders = []
 
-    @accepts(self=object, symbol=(Symbol, None), tag=str)
-    def Liquidate(self, symbol=None, tag=""):
-        if not symbol:
+    @convert_to_symbol('symbol', Singleton.CreateSymbol)
+    def createOrder(self, symbol, quantity, order_type, **kwargs):
+        order = InternalOrder(portfolio=self, symbol=symbol, quantity=quantity,
+                              order_type=order_type, **kwargs)
+        return self.AddOrder(order)
+
+    def liquidate(self, symbol=None, tag="", immediately=False):
+        if symbol is None:
             symbols = [sym for sym, pos in iter(self.items()) if pos.Quantity > 0]
             for s in symbols:
-                self.Debug("self.Liquidate({})".format(s))
-                self.Liquidate(symbol=s, tag=tag)
+                self.liquidate(symbol=s, tag=tag, immediately=immediately)
         else:
-            self.Debug("InternalOrder({}, {})".format(symbol, -self[symbol].Quantity))
             order = InternalOrder(portfolio=self, symbol=symbol, quantity=-self[symbol].Quantity, tag=tag)
-            self.AddOrder(order)
+            if immediately:
+                Singleton.Broker.ExecuteOrder(order)
+            else:
+                self.AddOrder(order)
 
-    @accepts(self=object, symbol=Symbol, target_alloc=float, tag=str)
-    def GenerateOrder(self, symbol, target_alloc, tag=""):
-        need_to_buy_qty = self.CalculateOrderQuantity(symbol, target_alloc)
-        return InternalOrder(portfolio=self, symbol=symbol, quantity=need_to_buy_qty, tag=tag)
-
-    @accepts(self=object, symbol=Symbol, percentage=float)
-    def CalculateOrderQuantity(self, symbol, target):
-        security = Singleton.QCAlgorithm.Securities[symbol]
-        unit_price = float(security.Price)
-        old_qty = self[symbol].Quantity
-
-        # can't order it if we don't have data
-        if unit_price == 0.0:
-            return 0
-
-        # if targeting zero, simply return the negative of the quantity
-        if target == 0.0:
-            return -old_qty
-
-        # this is the value in dollars that we want our holdings to have
-        targetPortfolioValue = target * (self.TotalHoldingsValue + self.CashBook)
-        currentHoldingsValue = self[symbol].Quantity * unit_price
-
-        # remove directionality, we'll work in the land of absolutes
-        targetOrderValue = abs(targetPortfolioValue - currentHoldingsValue)
-        direction = OrderDirection.Buy if targetPortfolioValue > currentHoldingsValue else OrderDirection.Sell
-
-        # calculate the total margin available
-        # security = Securities[symbol]
-        # return security.MarginModel.GetMarginRemaining(this, security, direction)
-        # marginRemaining = self.Portfolio.GetMarginRemaining(symbol, direction)
-        # if marginRemaining <= 0:
-        #     return 0
-
-        # continue iterating while we do not have enough margin for the order
-        # marginRequired = 0.0
-        orderValue = 0.0
-        orderFees = 0.0
-        feeToPriceRatio = 0.0
-
-        # compute the initial order quantity
-        orderQuantity = targetOrderValue / unit_price
-
-        # rounding off Order Quantity to the nearest multiple of Lot Size
-        lot_size = float(security.SymbolProperties.LotSize)
-        orderQuantity -= orderQuantity % lot_size
-
-        while True:
-            # reduce order quantity by feeToPriceRatio, since it is faster than by lot size
-            # if it becomes nonpositive, return zero
-            orderQuantity -= feeToPriceRatio
-            if orderQuantity <= 0:
-                return 0
-
-            # generate the order
-            # order = self._parent.MarketOrder(security.Symbol, orderQuantity, self.UtcTime)
-            # orderValue = order.GetValue(security)
-            orderValue = float(security.Price)
-
-            # orderFees = security.FeeModel.GetOrderFee(security, order)
-            orderFees = self.GetOrderFee(orderValue, orderQuantity)
-            self.Debug("order: Quantity={}, Value={}, Fees={}".format(orderQuantity, orderValue, orderFees))
-
-            # find an incremental delta value for the next iteration step
-            feeToPriceRatio = orderFees / unit_price
-            feeToPriceRatio -= feeToPriceRatio % lot_size
-            if feeToPriceRatio < lot_size:
-                feeToPriceRatio = lot_size
-
-            # calculate the margin required for the order
-            # marginRequired = security.MarginModel.GetInitialMarginRequiredForOrder(security, order)
-
-            # if marginRequired <= marginRemaining and orderValue + orderFees <= targetOrderValue:
-            if orderValue + orderFees <= targetOrderValue:
-                break
-
-        # add directionality back in
-        return -orderQuantity if direction == OrderDirection.Sell else orderQuantity
-
-
-    def GetOrderFee(self, price_per_share, qty):
-        tradeValue = abs(price_per_share * qty)
-        fee_per_share = 0.005
-        tradeFee = abs(fee_per_share * qty)
-
-        # Maximum Per Order: 0.5%
-        # Minimum per order: $1.0
-        maximumPerOrder = fee_per_share * tradeValue
-        minimumPerOrder = 1.0
-        tradeFee = min(tradeFee, maximumPerOrder)
-        tradeFee = max(tradeFee, minimumPerOrder)
-        return tradeFee
 
 
 class BenchmarkSymbol(object):
-    def __init__(self, ticker, name=None, crypto=False):
+    def __init__(self, ticker, name=None, security_type=SecurityType.Equity):
         self.Name = name or ticker
-        if crypto:
-            self._symbol = Singleton.QCAlgorithm.AddCrypto(ticker, Resolution.Daily).Symbol
-        else:
-            self._symbol = Singleton.QCAlgorithm.AddEquity(ticker, Resolution.Daily).Symbol
-        self._cost = 0
+        self.__symbol = Singleton.QCAlgorithm.AddSecurity(security_type, ticker, Resolution.Daily).Symbol
+        self.__cost = None # delay
+
+    def Reset(self):
+        self.__cost = Singleton.QCAlgorithm.Securities[self.__symbol.Value].Price
 
     @property
     def Performance(self):
-        if self._cost == 0:
-            self._cost = float(Singleton.QCAlgorithm.Securities[self._symbol.Value].Price)
-        price = float(Singleton.QCAlgorithm.Securities[self._symbol.Value].Price)
-        if price == 0 or self._cost == 0:
+        if Singleton.IsWarmingUp or (Singleton.QCAlgorithm.Portfolio.TotalHoldingsValue == 0.0 and Singleton.QCAlgorithm.Portfolio.TotalFees == 0.0):
             return 0.0
-        return 100.0 * ((price / self._cost) - 1.0)
+
+        if self.__cost == None:
+            self.Reset()
+
+        price = Singleton.QCAlgorithm.Securities[self.__symbol.Value].Price
+        if price == 0 or self.__cost == 0:
+            return 0.0
+        return round(100.0 * ((price / self.__cost) - 1.0), 2)
 
 
 class InternalOrder(object):
     @accepts(self=object, portfolio=Portfolio, symbol=Symbol, quantity=(int, float), order_type=int,
-             limit_price=(float, None), stop_price=(float, None), tag=str)
+             limit_price=(int, float, None), stop_price=(int, float, None), tag=str)
     def __init__(self, portfolio, symbol, quantity, order_type=OrderType.Market,
                  limit_price=None, stop_price=None, tag=""):
         self.Portfolio = portfolio
         self.Symbol = symbol
-        self.Quantity = quantity # Requested quantity
         self.OrderType = order_type
-        self.LimitPrice = limit_price
-        self.StopPrice = stop_price
+        self.Quantity = float(quantity)
+        self.LimitPrice = float(limit_price) if limit_price else None
+        self.StopPrice = float(stop_price) if stop_price else None
         self.tag = tag
         self.Ticket = None
 
@@ -420,8 +351,7 @@ class InternalOrder(object):
         return not self == other
 
     def ToString(self):
-        return "{0} order for {1} units of {2}".format(
-            InternalOrder.TypeToString(self.OrderType), self.Quantity, self.Symbol)
+        return f"{InternalOrder.TypeToString(self.OrderType)}Order({self.Symbol}, {self.Quantity})"
 
     def __str__(self):
         return self.ToString()
@@ -441,124 +371,148 @@ class InternalOrder(object):
 
 
 class Broker(object):
-    def __init__(self, cash=0.0):
-        self.Portfolio = Portfolio(broker=self, cash=cash)
-        self._to_submit = []
-        self.submitted = {}
-        self.Log = Singleton.Log
-        self.Debug = Singleton.Debug
-        self.Error = Singleton.Error
-        if Singleton.QCAlgorithm.LiveMode:
-            self._loadFromBroker()
+    def __init__(self, portfolio=None):
+        self._submitted = {}
+        # unmanaged cash and positions
+        self.Portfolio = Portfolio() if portfolio is None else portfolio
 
     def __str__(self):
-        return "To Submit: %s; Submitted: %s" % (self._to_submit, self.submitted)
+        return f"Submitted: {self._submitted}\nPortfolio: {self.Portfolio}"
 
     def __repr__(self):
         return self.__str__()
 
-    def _loadFromBroker(self):
-        if Singleton.QCAlgorithm.Portfolio.Invested:
-            self.Debug("_loadFromBroker")
-            positions = [x for x in Singleton.QCAlgorithm.Portfolio.Securities
-                         if x.Value.Holdings.AbsoluteQuantity != 0]
-            for position in positions:
-                cost = float(position.Value.Holdings.AveragePrice)
-                qty = float(position.Value.Holdings.AbsoluteQuantity)
-                symb = position.Key
-                self.Portfolio[symb] = Position(symb, qty, cost)
+    def ImportFromBroker(self, currency='USD'):
+        qc = Singleton.QCAlgorithm
+        qc.Log("sync started")
 
-        self.selfCheck()
+        crypto_codes = ['BTC', 'ETH', 'LTC']
+        qc.Log(f"Portfolio.CashBook.Keys: {qc.Portfolio.CashBook.Keys} ")
 
-    def selfCheck(self):
-        real_funds = self.Portfolio.TotalPortfolioValue
-        virtual_funds = sum(x.Portfolio.TotalPortfolioValue for x in Singleton.QCAlgorithm.algorithms)
-        if virtual_funds > real_funds:
-            message = "Insufficient funds in real portfolio ($%.2f) \
-                      to support running algorithms ($%.2f)."                                                                                                                           % (real_funds, virtual_funds)
-            self.Debug("EXCEPTION: %s" % message)
-            raise Exception(message)
+        cash_amount = qc.Portfolio.CashBook[currency].Amount
+        self.Portfolio.SetCash(cash_amount)
+        qc.Log(f"Portfolio.CashBook[{currency}].Amount: {cash_amount} ")
 
-    @accepts(self=object, order=InternalOrder)
-    def AddOrder(self, order):
-        self._to_submit.append(order)
+        for crypto_code in qc.Portfolio.CashBook.Keys:
+            currency_pair = f"{crypto_code}{currency}"  # eg, BTCUSD
+            qc.Log(f"Found {currency_pair} ({crypto_code})")
+            if crypto_code not in crypto_codes:
+                qc.Log(f"Ignoring {currency_pair} ({crypto_code})")
+                continue
+            cash = qc.Portfolio.CashBook[crypto_code]
+            symbol = ISymbolDict.CreateSymbol(currency_pair)
+            qty = cash.Amount
+            qc.Log(f"Found {cash.Amount} positions")
+            if qty == 0:
+                qc.Log(f"Found zero positions for {symbol.Value}")
+            price = cash.ConversionRate
+            self.Portfolio[symbol] = Position(symbol, qty, price, fees=0.0)
+            qc.Log(f"Imported from Singleton.Portfolio.CashBook: {cash} ")
 
-    def executeOrders(self):
-        self._minimizeOrders()
-        self._executeOrdersOnPortfolio()
-        self._executeOrdersOnBroker()
+        for symbol, position in qc.Portfolio.items():
+            qty = position.Quantity
+            if qty == 0:
+                qc.Log(f"Found zero positions for {symbol.Value}")
+                continue
+            price = position.AveragePrice
+            position = Position(symbol, qty, price, fees=0.0)
+            self.Portfolio[symbol] = position
+            qc.Log(f"Imported from Singleton.Portfolio {position} ")
 
-    def _minimizeOrders(self):
-        pass
+        qc.Log("sync done")
 
-    def _executeOrdersOnPortfolio(self):
-        remaining_orders = []
-        for order in self._to_submit:
-            filled_order = False
-            symbol = order.Symbol
-            if order.OrderType == OrderType.Market and order.Symbol in self.Portfolio:
-                current_quantity = self.Portfolio[symbol].Quantity
-                price_per_share = float(Singleton.QCAlgorithm.Securities[symbol.Value].Price)
-                if order.Quantity < current_quantity:
-                    order.Portfolio.FillOrder(symbol, order.Quantity, price_per_share)
-                    self.Portfolio.FillOrder(symbol, -order.Quantity, price_per_share)
-                    filled_order = True
-                else:
-                    order.Portfolio.FillOrder(symbol, current_quantity, price_per_share)
-                    self.Portfolio.FillOrder(symbol, -current_quantity, price_per_share)
-                    order.Quantity -= current_quantity
+    # @accepts(self=object, order=InternalOrder)
+    def ExecuteOrder(self, order):
+        qc = Singleton.QCAlgorithm
+        qc.Log(f"Executing order for {order.Quantity}")
+        if order.Quantity > 0:
+            original_qty = order.Quantity
+            self._execute_order_from_portfolio_if_needed(order)
+            filled = original_qty = order.Quantity
+            qc.Log(f"Filled {original_qty} from local portfolio")
+            if order.Quantity == 0:
+                return
 
-            if not filled_order:
-                remaining_orders.append(order)
+        qc.Log(f"Executing order for {order.Quantity} from external brokerage")
+        if not qc.LiveMode:
+            self._execute_order(order)
 
-        self.Portfolio.CashBook = 0.0 # We don't use this cash
-        self._to_submit = remaining_orders
+    def _fill_order_from_portfolio(self, order):
+        symbol = order.Symbol
+        price_per_share = Singleton.QCAlgorithm.Securities[symbol.Value].Price
+        ask = order.Quantity
+        existing = self.Portfolio[symbol].Quantity
+        fill_qty = min(ask, existing)
+        self.Portfolio._fill_order(symbol, -fill_qty, price_per_share)
+        order.Portfolio._fill_order(symbol, fill_qty, price_per_share)
+        order.Quantity -= fill_qty
 
+    def _execute_order_from_portfolio_if_needed(self, order):
+        if order.Symbol in self.Portfolio:
+            self._fill_order_from_portfolio(order)
+            if order.Quantity == 0:
+                return
 
-    def _executeOrdersOnBroker(self):
-        while any(self._to_submit):
-            order = self._to_submit.pop(0)
-            symb = order.Symbol
-            qty = order.Quantity
-            price_per_share = Singleton.QCAlgorithm.Securities[symb.Value].Price
+        price_per_share = Singleton.QCAlgorithm.Securities[order.Symbol.Value].Price
+        estimated_cost = order.Quantity *  price_per_share
+        available_cash = Singleton.Broker.Portfolio.Cash
+        if estimated_cost > available_cash and self.Portfolio.Invested:
+            self.Portfolio.liquidate(immediately=True)
 
-            self.Debug("Submitting a %s (est: $%.2f/share)" % (order, price_per_share))
+    def _execute_order(self, order):
+        symb = order.Symbol
+        qty = order.Quantity
 
-            market_is_open = Singleton.QCAlgorithm.Securities[symb.Value].Exchange.DateTimeIsOpen(
-                Singleton.Time)
+        market_is_open = Singleton.QCAlgorithm.Securities[symb.Value].Exchange.ExchangeOpen
 
-            # Submit order.
-            if order.OrderType == OrderType.Market:
-                asynchronous = False
-                if qty < 0:
-                    asynchronous = False
-                if market_is_open:
-                    ticket = Singleton.QCAlgorithm.MarketOrder(symb, qty, asynchronous, order.tag)
-                else:
-                    ticket = Singleton.QCAlgorithm.MarketOnOpenOrder(symb, qty, order.tag)
-            elif order.OrderType == OrderType.Limit:
-                ticket = Singleton.QCAlgorithm.LimitOrder(symb, qty, order.LimitPrice, order.tag)
-            elif order.OrderType == OrderType.StopMarket:
-                ticket = Singleton.QCAlgorithm.StopMarketOrder(symb, qty, order.StopPrice, order.tag)
-            elif order.OrderType == OrderType.StopLimit:
-                ticket = Singleton.QCAlgorithm.StopLimitOrder(symb, qty, order.StopPrice, order.LimitPrice, order.tag)
-            elif order.OrderType == OrderType.MarketOnOpen:
-                ticket = Singleton.QCAlgorithm.MarketOnOpenOrder(symb, qty, order.tag)
-            elif order.OrderType == OrderType.MarketOnClose:
-                ticket = Singleton.QCAlgorithm.MarketOnCloseOrder(symb, qty, order.tag)
-            elif order.OrderType == OrderType.OptionExercise:
-                ticket = Singleton.QCAlgorithm.OptionExerciseOrder(symb, qty, order.tag)
+        # Submit order.
+        if order.OrderType == OrderType.Market:
+            if market_is_open:
+                ticket = Singleton.QCAlgorithm.MarketOrder(symb, float(qty), False, order.tag)
+            else:
+                ticket = Singleton.QCAlgorithm.MarketOnOpenOrder(symb, float(qty), order.tag)
+        elif order.OrderType == OrderType.Limit:
+            ticket = Singleton.QCAlgorithm.LimitOrder(symb, float(qty), order.LimitPrice, order.tag)
+        elif order.OrderType == OrderType.StopMarket:
+            ticket = Singleton.QCAlgorithm.StopMarketOrder(symb, float(qty), order.StopPrice, order.tag)
+        elif order.OrderType == OrderType.StopLimit:
+            ticket = Singleton.QCAlgorithm.StopLimitOrder(symb, float(qty), order.StopPrice, order.LimitPrice, order.tag)
+        elif order.OrderType == OrderType.MarketOnOpen:
+            ticket = Singleton.QCAlgorithm.MarketOnOpenOrder(symb, float(qty), order.tag)
+        elif order.OrderType == OrderType.MarketOnClose:
+            ticket = Singleton.QCAlgorithm.MarketOnCloseOrder(symb, float(qty), order.tag)
+        elif order.OrderType == OrderType.OptionExercise:
+            ticket = Singleton.QCAlgorithm.OptionExerciseOrder(symb, float(qty), order.tag)
 
-            # Handle synchronous orders
-            if ticket.Status in [OrderStatus.Filled, OrderStatus.PartiallyFilled]:
-                self.Debug("Order was filled synchronously!")
-                for order_event in ticket.OrderEvents:
-                    qty -= float(order_event.FillQuantity)
-                    order.Portfolio.ProcessOrderEvent(order_event, order)
-                    # TODO: call alg.OnOrderEvent()
+        # Handle synchronous orders
+        order_is_done = Helper.is_order_done(ticket.Status)
+        for order_event in ticket.OrderEvents:
+            if order_is_done:
+                order.Portfolio.ProcessFill(order_event, order)
+                order.Portfolio.Algorithm.OnOrderEvent(order_event)
+                order.Portfolio.Algorithm.TotalOrders += 1
 
-            if qty != 0:
-                # Update order with ticket.
-                order.Quantity = qty
-                order.Ticket = ticket
-                self.submitted[ticket.OrderId] = order
+        if not order_is_done:
+            order.Ticket = ticket
+            self._submitted[ticket.OrderId] = order
+
+    @accepts(self=object, order_event=OrderEvent)
+    def HandleOrderEvent(self, order_event):
+        Singleton.Debug(f"> HandleOrderEvent (1): OrderEvent: {order_event}")
+        order = self._submitted.pop(order_event.OrderId, None)
+        if not order:
+            Singleton.Debug(f"Could not find order id {order_event.OrderId} in queue: {self._submitted}")
+            return
+
+        Singleton.Debug(f"> HandleOrderEvent (2): Order: {order}")
+        if Helper.is_order_done(order_event.Status):
+            order.Portfolio.ProcessFill(order_event, order)
+            order.Portfolio.Algorithm.OnOrderEvent(order_event)
+            order.Portfolio.Algorithm.TotalOrders += 1
+
+        else:
+            # Re-add orders that are still open.
+            self._submitted[order_event.OrderId] = order
+
+    def GetOrderIdsForPortfolio(self, matching_portfolio):
+        return [order_id for order_id, order in self._submitted.items() if order.Portfolio == matching_portfolio]

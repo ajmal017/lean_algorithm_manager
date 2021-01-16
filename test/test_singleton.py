@@ -3,7 +3,7 @@ import unittest
 
 from datetime import date
 from market import Singleton
-from algorithm_manager import AlgorithmManager as QCAlgorithm
+from algorithm import AlgorithmManager as QCAlgorithm
 
 
 def assert_log_level_error(test):

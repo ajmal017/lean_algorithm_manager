@@ -1,9 +1,4 @@
-"""
-MD5: 328d585a4f8f6d39574a171a6c53f445
-"""
-
 from datetime import date
-from decimal import Decimal
 from decorators import accepts
 
 
@@ -26,14 +21,39 @@ class Market(object):
 
 class SecurityType(object):
     Equity = 1
+    Crypto = 2
 
 class Resolution(object):
     Daily = 1
     Minute = 2
     Second = 3
 
-class Symbol(object):
+class SymbolProperties(object):
+    @property
+    def LotSize(self): return 1.0
 
+class Settings(object):
+    # @property
+    # def DataSubscriptionLimit(self):  return int.MaxValue
+    @property
+    def LiquidateEnabled(self):  return True
+    @property
+    def FreePortfolioValue(self):  return 250
+    @property
+    def FreePortfolioValuePercentage(self):  return 0.0025
+    # @property
+    # def StalePriceTimeSpan(self):  return Time.OneHour
+    # @property
+    # def MaxAbsolutePortfolioTargetPercentage(self):  return 1000000000.0
+    # @property
+    # def MinAbsolutePortfolioTargetPercentage(self):  return 0.000000000
+
+class Exchange(object):
+    @property
+    def ExchangeOpen(self): return True
+
+
+class Symbol(object):
     @classmethod
     def Create(cls, ticker, security_type, market):
         return Symbol(ticker, security_type, market)
@@ -55,23 +75,15 @@ class Symbol(object):
     def __str__(self):
         return self.Value
 
-
-class SymbolProperties(object):
-    @property
-    def LotSize(self):
-        return Decimal(1)
-
-
-class Exchange(object):
-    def DateTimeIsOpen(self, _time):
-        return True
+    def __repr__(self):
+        return self.__str__()
 
 
 class Security(object):
-    @accepts(self=object, ticker=(str, Symbol), price=(float, int))
+    @accepts(self=object, ticker=(str, Symbol), price=(int, float))
     def __init__(self, ticker, price):
         self.Symbol = ticker if isinstance(ticker, Symbol) else Symbol(ticker)
-        self.Price = Decimal(price)
+        self.Price = float(price)
         self.Leverage = 1.0
         self.High = self.Price
         self.Low = self.Price
@@ -94,18 +106,18 @@ class InternalSecurityManager(dict):
     @accepts(self=object, key=(Symbol, str), value=Security)
     def __setitem__(self, key, value):
         if isinstance(key, str):
-            key = self.createKey(key)
+            key = self.CreateSymbol(key)
         return super().__setitem__(key, value)
 
     @accepts(self=object, key=(Symbol, str))
     def __getitem__(self, key):
         if isinstance(key, str):
-            key = self.createKey(key)
+            key = self.CreateSymbol(key)
         if key not in self:
             return self.NoValue(key)
         return super().__getitem__(key)
 
-    def createKey(self, key):
+    def CreateSymbol(self, key):
         return Symbol.Create(key, SecurityType.Equity, Market.USA)
 
     def NoValue(self, key):
@@ -155,6 +167,7 @@ class OrderStatus(object):
     # None = 6
     Invalid = 7
     CancelPending = 8
+    UpdateSubmitted = 9
 
 class Order(object):
     def __init__(self, order_id, symbol, quantity, order_type=OrderType.Market,
@@ -169,12 +182,10 @@ class Order(object):
         self.Tag = tag
         self.AverageFillPrice = None
         self.QuantityFilled = None
-        self.AbsoluteQuantity = 0
         self.Value = 0
 
     def ToString(self):
-        return "OrderId: {0} {1} {2} order for {3} units of {5}" \
-            .format(self.Id, self.Status, OrderType.TypeToString(self.Type), self.Quantity, self.Symbol)
+        return f"Order({self.Id}, {self.Status}, {OrderType.TypeToString(self.Type)}, {self.Symbol}, {self.Quantity})"
 
     def __str__(self):
         return self.ToString()
@@ -218,7 +229,7 @@ class OrderTicket(object):
 
     @property
     def AverageFillPrice(self):
-        return sum([event.FillPrice for event in self.OrderEvents]) / float(self.QuantityFilled)
+        return sum([event.FillPrice for event in self.OrderEvents]) / self.QuantityFilled
 
     @property
     def QuantityFilled(self):
@@ -237,22 +248,37 @@ class OrderTicket(object):
         pass
 
 
-class Amount(object):
-    def __init__(self, amount):
-        self.amount = amount
+# class Amount(float):
+#     def __init__(self, amount):
+#         self.amount = amount
 
+#     @property
+#     def Amount(self):
+#         return self.amount
+
+#     def __float__(self):
+#          return float(self.amount)
+
+#     def __eq__(self, other):
+#         return float(self) == float(other)
+
+# class Value(object):
+#     def __init__(self, amount):
+#         self.value = Amount(amount)
+
+#     @property
+#     def Value(self):
+#         return self.value
+
+
+class CashAmount(float):
     @property
     def Amount(self):
-        return self.amount
+        return self
 
-class Value(object):
-    def __init__(self, amount):
-        self.value = Amount(amount)
-
-    @property
-    def Value(self):
-        return self.value
-
+class OrderFee(object):
+    def __init__(self, value):
+        self.Value = CashAmount(value)
 
 class OrderEvent(object):
     def __init__(self, order_id, symbol, quantity, price=None, status=OrderStatus.New):
@@ -260,19 +286,18 @@ class OrderEvent(object):
         self.Symbol = symbol
         self.Quantity = quantity
         self.Status = status
-        self.OrderFee = Value(0)
-        self.FillPrice = 0
-        self.FillQuantity = 0
+        self.OrderFee = OrderFee(0.0)
+        self.FillPrice = 0.0
+        self.FillQuantity = 0.0
         if price:
             self.FillPrice = price
         if status == OrderStatus.Filled:
             self.FillQuantity = quantity
         if status == OrderStatus.PartiallyFilled:
-            self.FillQuantity = quantity / 2
+            self.FillQuantity = quantity / 2.0
 
     def __str__(self):
-        return "OrderId: %d Submitted order for %d units of %s" % \
-            (self.OrderId, self.Quantity, self.Symbol)
+        return f"OrderEvent({self.OrderId}, {self.Status}, {self.Symbol}, {self.Quantity})"
 
 
 class SecurityTransactionManager(dict):
@@ -311,6 +336,38 @@ class SecurityTransactionManager(dict):
     def GetSufficientCapitalForOrder(self, _SecurityPortfolioManager, _Order):
         return True
 
+
+class CashAmount(float):
+    @property
+    def Amount(self):
+        return self
+
+
+class Cash(CashAmount):
+    def __new__(cls, currency_symbol, amount, price=1.0):
+        return super().__new__(cls, amount)
+
+    def __init__(self, currency_symbol, amount, price=1.0):
+        CashAmount.__init__(amount)
+        self.CurrencySymbol = currency_symbol
+        self.ConversionRate = price
+
+
+class CashBook(dict):
+    @property
+    def Keys(self):
+        return self.keys()
+
+
+
+class SecurityPortfolioManager(dict):
+    def __init__(self):
+        self.Securities = InternalSecurityManager()
+        self.Transactions = SecurityTransactionManager()
+        self.Cash = Cash('USD', 0.0, 1.0)
+        self.CashBook = CashBook()
+        self.CashBook['USD'] = Cash('USD', 0.0, 1.0)
+
 class Time:
     TODAY = date(1, 1, 1)
     @classmethod
@@ -320,9 +377,9 @@ class Time:
 # Dummy interface.
 class QCAlgorithm(object):
     def __init__(self, default_order_status=OrderStatus.Submitted):
-        self.Securities = InternalSecurityManager()
-        self.Portfolio = None
-        self.Transactions = SecurityTransactionManager()
+        self.Portfolio = SecurityPortfolioManager()
+        self.Securities = self.Portfolio.Securities
+        self.Transactions = self.Portfolio.Transactions
         self.LiveMode = False
         self.IsWarmingUp = False
         self.SetBrokerageModel = BrokerageName.Default
@@ -335,7 +392,8 @@ class QCAlgorithm(object):
         self.Initialize()
 
     def Initialize(self): pass
-    def SetCash(self, *args, **kwargs): pass
+    def OnWarmupFinished(self): pass
+    def SetCash(self, cash): pass
     def SetStartDate(self, year, month, day): pass
     def SetEndDate(self, year, month, day): pass
     def SetWarmUp(self, period): pass
@@ -346,13 +404,19 @@ class QCAlgorithm(object):
     def AddChart(self, plot): pass
     def Plot(self, chart_name, series_name, value): pass
 
+    def AddSecurity(self, _security_type, ticker, _resolution):
+        return self.Securities[ticker]
 
     def AddEquity(self, ticker, _resolution):
-        return self.Securities[ticker]
+        return self.AddSecurity(None, ticker, None)
+
+    def AddCrypto(self, ticker, resolution):
+        return self.AddSecurity(None, ticker, None)
 
     def _mockOrder(self, symbol, quantity, order_type):
         ticket = self.Transactions.AddOrder(symbol, quantity, order_type=order_type,
                                             status=self._default_order_status)
+        ticket.Status = OrderStatus.Submitted
         self.Transactions[ticket.OrderId] = ticket
         return ticket
 
@@ -383,6 +447,8 @@ class QCAlgorithm(object):
     def Liquidate(self, symbol=None, tag=""):
         pass
 
+    def CalculateOrderQuantity(self, symbol, target):
+        return 1
 
 class SeriesType(object):
     Line = 1

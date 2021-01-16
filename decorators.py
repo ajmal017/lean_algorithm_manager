@@ -1,7 +1,5 @@
-"""
-MD5: d6dec1c2f9007af5426dc16dc3b7dbbb
-"""
-
+from functools import wraps
+import functools
 
 def accepts(**types):
     def check_accepts(f):
@@ -58,3 +56,25 @@ def convert_to_symbol(arg_name, make_symbol_func):
         return wrapper
 
     return make_wrapper
+
+####################################################################################
+
+def all_methods(decorator):
+    @wraps(decorator)
+    def decorate(cls):
+        for attr in cls.__dict__:
+            if callable(getattr(cls, attr)):
+                setattr(cls, attr, decorator(getattr(cls, attr)))
+        return cls
+    return decorate
+
+def post(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        retval = func(*args, **kwargs)
+        if len(args) > 0:
+            attr = getattr(args[0], f"_AlgorithmManager__post", None)
+            if callable(attr):
+                attr()
+        return retval
+    return wrapper

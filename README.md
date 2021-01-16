@@ -32,10 +32,10 @@ python -m unittest discover -s test
 
 Algorithm: Independent algorithm that contains a Portfolio with Positions. We can only have one Portfolio per algorithm, but we can have multiple algorithms.
 
-Portfolio: Set of positions and cash. Globally, we can have several algorithms, each one with its own Portfolio. The sum of all the portfolios cannot exceed the underlying global Broker's Portfolio.
+Portfolio: Set of positions and cash. Globally, we can have several algorithms, each one with its own Portfolio. The sum of all the portfolios cannot exceed the underlying global Transactions's Portfolio.
 
 Position: current position (long/short) in a given Portfolio. Globally, we can have several Positions with the same symbol, but only one in a single Portfolio.
 
-Broker: Middleware between Portfolio actions (buy/sell) and Broker/Lean. This layer manages the overall positions across all algorithms. On startup, it loads the existing real brokers positions, which are made available before actually buying real positions. Might minimize buy/sell if they happen to match across algorithms.
+Transactions: Middleware between Portfolio actions (buy/sell) and Transactions/Lean. This layer manages the overall positions across all algorithms. On startup, it loads the existing real brokers positions, which are made available before actually buying real positions. Might minimize buy/sell if they happen to match across algorithms.
 
 
